@@ -226,8 +226,8 @@ async def get_share_link(event_id: str):
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
     
-    # This would be replaced with actual domain in production
-    share_url = f"/respond/{event_id}"
+    # Use the API path for the share URL
+    share_url = f"/api/respond/{event_id}"
     return {"share_url": share_url, "event_title": event["title"]}
 
 @app.delete("/api/events/{event_id}")
