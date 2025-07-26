@@ -241,7 +241,7 @@ async def delete_event(event_id: str):
     return {"message": "Event deleted successfully"}
 
 # Public response page (for people to respond)
-@app.get("/respond/{event_id}", response_class=HTMLResponse)
+@app.get("/api/respond/{event_id}", response_class=HTMLResponse)
 async def response_page(event_id: str):
     event = events_collection.find_one({"id": event_id})
     if not event:
