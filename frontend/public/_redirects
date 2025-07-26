@@ -1,0 +1,6 @@
+# Redirect backend routes to backend
+/respond/* /respond/:splat 200!
+/api/* /api/:splat 200!
+
+# All other routes go to React app
+/* /index.html 200
