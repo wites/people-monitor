@@ -135,8 +135,8 @@ function App() {
     try {
       const response = await fetch(`${API_URL}/api/events/${selectedEvent}/share`);
       const data = await response.json();
-      // Use the backend URL for the share link, not the frontend URL
-      const fullUrl = `${API_URL}/respond/${selectedEvent}`;
+      // Use the backend URL with the API path
+      const fullUrl = `${API_URL}/api/respond/${selectedEvent}`;
       
       // Copy to clipboard
       navigator.clipboard.writeText(fullUrl);
