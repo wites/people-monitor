@@ -161,7 +161,8 @@ class PeopleMonitorAPITester:
             "POST",
             "api/events",
             200,
-            data=event_data
+            data=event_data,
+            auth_required=True
         )
         
         if success and 'event_id' in response:
@@ -176,7 +177,8 @@ class PeopleMonitorAPITester:
             "Get Events List",
             "GET",
             "api/events",
-            200
+            200,
+            auth_required=True
         )
         
         if success and isinstance(response, list):
@@ -194,7 +196,8 @@ class PeopleMonitorAPITester:
             "Get Specific Event",
             "GET",
             f"api/events/{self.created_event_id}",
-            200
+            200,
+            auth_required=True
         )[0]
 
     def test_add_people_to_event(self):
