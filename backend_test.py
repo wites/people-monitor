@@ -248,7 +248,8 @@ class PeopleMonitorAPITester:
             "Get Event People",
             "GET",
             f"api/events/{self.created_event_id}/people",
-            200
+            200,
+            auth_required=True
         )
         
         if success and isinstance(response, list):
