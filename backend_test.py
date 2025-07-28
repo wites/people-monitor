@@ -11,6 +11,13 @@ class PeopleMonitorAPITester:
         self.tests_passed = 0
         self.created_event_id = None
         self.created_people = []
+        self.token = None
+        self.user_id = None
+        
+        # Test user credentials
+        self.test_email = f"test_admin_{datetime.now().strftime('%H%M%S')}@example.com"
+        self.test_password = "TestPass123!"
+        self.test_name = "Test Admin"
 
     def run_test(self, name, method, endpoint, expected_status, data=None, params=None):
         """Run a single API test"""
