@@ -4,13 +4,25 @@ import './App.css';
 const API_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8001';
 
 function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [events, setEvents] = useState([]);
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [showCreateEvent, setShowCreateEvent] = useState(false);
   const [showAddPerson, setShowAddPerson] = useState(false);
+  const [showAuth, setShowAuth] = useState(false);
+  const [isLogin, setIsLogin] = useState(true);
   const [eventStatistics, setEventStatistics] = useState(null);
   const [people, setPeople] = useState([]);
   const [responses, setResponses] = useState([]);
+
+  // Auth form
+  const [authForm, setAuthForm] = useState({
+    email: '',
+    password: '',
+    name: ''
+  });
 
   // Create event form
   const [eventForm, setEventForm] = useState({
@@ -28,23 +40,106 @@ function App() {
 
   const [newTag, setNewTag] = useState('');
 
+  // Check authentication on app load
   useEffect(() => {
-    fetchEvents();
+    checkAuth();
   }, []);
 
   useEffect(() => {
-    if (selectedEvent) {
+    if (isAuthenticated) {
+      fetchEvents();
+    }
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (selectedEvent && isAuthenticated) {
       fetchEventDetails();
       const interval = setInterval(fetchEventDetails, 5000); // Refresh every 5 seconds
       return () => clearInterval(interval);
     }
-  }, [selectedEvent]);
+  }, [selectedEvent, isAuthenticated]);
+
+  const checkAuth = async () => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_URL}/api/auth/me`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        const userData = await response.json();
+        setUser(userData);
+        setIsAuthenticated(true);
+      } else {
+        localStorage.removeItem('token');
+      }
+    } catch (error) {
+      console.error('Error checking auth:', error);
+      localStorage.removeItem('token');
+    }
+    setLoading(false);
+  };
+
+  const handleAuth = async (e) => {
+    e.preventDefault();
+    const endpoint = isLogin ? '/api/auth/login' : '/api/auth/register';
+    const payload = isLogin ? 
+      { email: authForm.email, password: authForm.password } :
+      { email: authForm.email, password: authForm.password, name: authForm.name };
+
+    try {
+      const response = await fetch(`${API_URL}${endpoint}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        localStorage.setItem('token', data.access_token);
+        setShowAuth(false);
+        setAuthForm({ email: '', password: '', name: '' });
+        await checkAuth();
+      } else {
+        const error = await response.json();
+        alert(error.detail || 'Authentication failed');
+      }
+    } catch (error) {
+      console.error('Error during auth:', error);
+      alert('Authentication failed');
+    }
+  };
+
+  const logout = () => {
+    localStorage.removeItem('token');
+    setIsAuthenticated(false);
+    setUser(null);
+    setEvents([]);
+    setSelectedEvent(null);
+  };
 
   const fetchEvents = async () => {
     try {
-      const response = await fetch(`${API_URL}/api/events`);
-      const data = await response.json();
-      setEvents(data);
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_URL}/api/events`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setEvents(data);
+      }
     } catch (error) {
       console.error('Error fetching events:', error);
     }
@@ -54,19 +149,26 @@ function App() {
     if (!selectedEvent) return;
 
     try {
+      const token = localStorage.getItem('token');
+      const headers = {
+        'Authorization': `Bearer ${token}`
+      };
+
       const [peopleRes, statsRes, responsesRes] = await Promise.all([
-        fetch(`${API_URL}/api/events/${selectedEvent}/people`),
-        fetch(`${API_URL}/api/events/${selectedEvent}/statistics`),
-        fetch(`${API_URL}/api/events/${selectedEvent}/responses`)
+        fetch(`${API_URL}/api/events/${selectedEvent}/people`, { headers }),
+        fetch(`${API_URL}/api/events/${selectedEvent}/statistics`, { headers }),
+        fetch(`${API_URL}/api/events/${selectedEvent}/responses`, { headers })
       ]);
 
-      const peopleData = await peopleRes.json();
-      const statsData = await statsRes.json();
-      const responsesData = await responsesRes.json();
+      if (peopleRes.ok && statsRes.ok && responsesRes.ok) {
+        const peopleData = await peopleRes.json();
+        const statsData = await statsRes.json();
+        const responsesData = await responsesRes.json();
 
-      setPeople(peopleData);
-      setEventStatistics(statsData);
-      setResponses(responsesData);
+        setPeople(peopleData);
+        setEventStatistics(statsData);
+        setResponses(responsesData);
+      }
     } catch (error) {
       console.error('Error fetching event details:', error);
     }
@@ -75,10 +177,12 @@ function App() {
   const createEvent = async (e) => {
     e.preventDefault();
     try {
+      const token = localStorage.getItem('token');
       const response = await fetch(`${API_URL}/api/events`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify(eventForm),
       });
@@ -96,10 +200,12 @@ function App() {
   const addPerson = async (e) => {
     e.preventDefault();
     try {
+      const token = localStorage.getItem('token');
       const response = await fetch(`${API_URL}/api/events/${selectedEvent}/people`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify(personForm),
       });
@@ -133,14 +239,21 @@ function App() {
 
   const generateShareLink = async () => {
     try {
-      const response = await fetch(`${API_URL}/api/events/${selectedEvent}/share`);
-      const data = await response.json();
-      // Use the backend URL with the API path
-      const fullUrl = `${API_URL}/api/respond/${selectedEvent}`;
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_URL}/api/events/${selectedEvent}/share`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
       
-      // Copy to clipboard
-      navigator.clipboard.writeText(fullUrl);
-      alert('Share link copied to clipboard!');
+      if (response.ok) {
+        const data = await response.json();
+        const fullUrl = `${API_URL}/api/respond/${selectedEvent}`;
+        
+        // Copy to clipboard
+        navigator.clipboard.writeText(fullUrl);
+        alert('Share link copied to clipboard!');
+      }
     } catch (error) {
       console.error('Error generating share link:', error);
     }
@@ -171,18 +284,139 @@ function App() {
     return responses.find(r => r.person_id === personId);
   };
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+        <div className="text-center">
+          <div className="loading mb-4"></div>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+        <div className="max-w-md w-full mx-4">
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <h1 className="text-3xl font-bold text-center text-gray-800 mb-2">People Monitor</h1>
+            <p className="text-center text-gray-600 mb-6">Emergency Response & Safety Tracking</p>
+            
+            <div className="text-center mb-6">
+              <button
+                onClick={() => setShowAuth(true)}
+                className="bg-blue-500 text-white px-6 py-3 rounded-md hover:bg-blue-600 transition-colors font-medium"
+              >
+                Get Started
+              </button>
+            </div>
+            
+            <div className="text-center text-sm text-gray-500">
+              <p>Secure admin access for emergency response coordination</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Auth Modal */}
+        {showAuth && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+              <h3 className="text-xl font-semibold text-gray-800 mb-4">
+                {isLogin ? 'Login' : 'Register'}
+              </h3>
+              
+              <form onSubmit={handleAuth}>
+                {!isLogin && (
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Name</label>
+                    <input
+                      type="text"
+                      value={authForm.name}
+                      onChange={(e) => setAuthForm({...authForm, name: e.target.value})}
+                      className="w-full p-2 border border-gray-300 rounded-md"
+                      required
+                    />
+                  </div>
+                )}
+                
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
+                  <input
+                    type="email"
+                    value={authForm.email}
+                    onChange={(e) => setAuthForm({...authForm, email: e.target.value})}
+                    className="w-full p-2 border border-gray-300 rounded-md"
+                    required
+                  />
+                </div>
+                
+                <div className="mb-6">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Password</label>
+                  <input
+                    type="password"
+                    value={authForm.password}
+                    onChange={(e) => setAuthForm({...authForm, password: e.target.value})}
+                    className="w-full p-2 border border-gray-300 rounded-md"
+                    required
+                  />
+                </div>
+                
+                <button
+                  type="submit"
+                  className="w-full bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 transition-colors mb-4"
+                >
+                  {isLogin ? 'Login' : 'Register'}
+                </button>
+              </form>
+              
+              <div className="text-center">
+                <button
+                  onClick={() => setIsLogin(!isLogin)}
+                  className="text-blue-500 hover:text-blue-700 text-sm"
+                >
+                  {isLogin ? 'Need an account? Register' : 'Already have an account? Login'}
+                </button>
+              </div>
+              
+              <div className="mt-4 text-center">
+                <button
+                  onClick={() => setShowAuth(false)}
+                  className="text-gray-500 hover:text-gray-700 text-sm"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-100">
       <div className="container mx-auto px-4 py-8">
         <header className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-gray-800 mb-2">People Monitor</h1>
+          <div className="flex justify-between items-center mb-4">
+            <h1 className="text-4xl font-bold text-gray-800">People Monitor</h1>
+            <div className="flex items-center gap-4">
+              <span className="text-gray-600">Welcome, {user?.name}</span>
+              <button
+                onClick={logout}
+                className="text-red-500 hover:text-red-700 text-sm"
+              >
+                Logout
+              </button>
+            </div>
+          </div>
           <p className="text-gray-600">Emergency Response & Safety Tracking</p>
         </header>
 
         {!selectedEvent ? (
           <div className="max-w-4xl mx-auto">
             <div className="flex justify-between items-center mb-6">
-              <h2 className="text-2xl font-semibold text-gray-800">Active Events</h2>
+              <h2 className="text-2xl font-semibold text-gray-800">Your Events</h2>
               <button
                 onClick={() => setShowCreateEvent(true)}
                 className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition-colors"
@@ -214,7 +448,7 @@ function App() {
 
             {events.length === 0 && (
               <div className="text-center py-12">
-                <p className="text-gray-500 text-lg">No active events</p>
+                <p className="text-gray-500 text-lg">No events created yet</p>
                 <p className="text-gray-400">Create your first calamity monitoring event</p>
               </div>
             )}
