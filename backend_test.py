@@ -39,6 +39,8 @@ class PeopleMonitorAPITester:
                 response = requests.get(url, headers=headers, params=params)
             elif method == 'POST':
                 response = requests.post(url, json=data, headers=headers)
+            elif method == 'PUT':
+                response = requests.put(url, json=data, headers=headers)
             elif method == 'DELETE':
                 response = requests.delete(url, headers=headers)
 
