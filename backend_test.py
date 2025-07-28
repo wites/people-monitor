@@ -384,7 +384,8 @@ class PeopleMonitorAPITester:
             "Get Event Statistics",
             "GET",
             f"api/events/{self.created_event_id}/statistics",
-            200
+            200,
+            auth_required=True
         )
         
         if success and 'total_people' in response:
