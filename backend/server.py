@@ -421,6 +421,53 @@ async def add_person_to_event(event_id: str, request: AddPersonRequest, current_
     
     return {"person_id": person_id, "message": "Person added successfully"}
 
+@app.post("/api/events/{event_id}/people/bulk")
+async def bulk_add_people_to_event(event_id: str, request: BulkAddPeopleRequest, current_user: dict = Depends(get_current_user)):
+    event = events_collection.find_one({"id": event_id, "created_by": current_user["id"]})
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+    
+    added_people = []
+    errors = []
+    
+    for i, person_data in enumerate(request.people):
+        try:
+            person_id = str(uuid.uuid4())
+            person = {
+                "id": person_id,
+                "name": person_data.name.strip(),
+                "contact": person_data.contact.strip(),
+                "tags": [tag.strip() for tag in person_data.tags if tag.strip()]
+            }
+            
+            # Basic validation
+            if not person["name"] or not person["contact"]:
+                errors.append(f"Row {i+1}: Name and contact are required")
+                continue
+                
+            added_people.append(person)
+            
+        except Exception as e:
+            errors.append(f"Row {i+1}: {str(e)}")
+    
+    if added_people:
+        events_collection.update_one(
+            {"id": event_id},
+            {"$push": {"people": {"$each": added_people}}}
+        )
+    
+    result = {
+        "added_count": len(added_people),
+        "total_requested": len(request.people),
+        "errors": errors,
+        "message": f"Successfully added {len(added_people)} people"
+    }
+    
+    if errors:
+        result["message"] += f" with {len(errors)} errors"
+    
+    return result
+
 @app.get("/api/events/{event_id}/people")
 async def get_event_people(event_id: str, current_user: dict = Depends(get_current_user)):
     event = events_collection.find_one({"id": event_id, "created_by": current_user["id"]})
