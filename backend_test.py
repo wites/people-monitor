@@ -540,24 +540,196 @@ class PeopleMonitorAPITester:
         
         return success
 
+    def test_update_event(self):
+        """Test updating event details"""
+        if not self.created_event_id:
+            print("❌ No event ID available for testing")
+            return False
+
+        update_data = {
+            "title": "Updated Office Flood Emergency",
+            "description": "Updated description: Severe flooding in the office building. All employees need to report their safety status immediately.",
+            "calamity_type": "typhoon"
+        }
+
+        success, response = self.run_test(
+            "Update Event Details",
+            "PUT",
+            f"api/events/{self.created_event_id}",
+            200,
+            data=update_data,
+            auth_required=True
+        )
+        
+        if success:
+            print(f"   Message: {response.get('message', 'No message')}")
+            return True
+        return False
+
+    def test_duplicate_event(self):
+        """Test duplicating an event with all people"""
+        if not self.created_event_id:
+            print("❌ No event ID available for testing")
+            return False
+
+        duplicate_data = {
+            "title": "Duplicate Emergency Event",
+            "description": "This is a duplicated event with all the same people"
+        }
+
+        success, response = self.run_test(
+            "Duplicate Event with People",
+            "POST",
+            f"api/events/{self.created_event_id}/duplicate",
+            200,
+            data=duplicate_data,
+            auth_required=True
+        )
+        
+        if success and 'event_id' in response:
+            duplicate_event_id = response['event_id']
+            print(f"   Duplicated event ID: {duplicate_event_id}")
+            
+            # Verify the duplicated event has the same people
+            success_people, people_response = self.run_test(
+                "Get Duplicated Event People",
+                "GET",
+                f"api/events/{duplicate_event_id}/people",
+                200,
+                auth_required=True
+            )
+            
+            if success_people and isinstance(people_response, list):
+                print(f"   Duplicated event has {len(people_response)} people")
+                return True
+            else:
+                print("   ⚠ Failed to verify people in duplicated event")
+                return False
+        return False
+
+    def test_update_person(self):
+        """Test updating person details"""
+        if not self.created_event_id or not self.created_people:
+            print("❌ No event ID or people available for testing")
+            return False
+
+        person_to_update = self.created_people[0]
+        update_data = {
+            "name": f"Updated {person_to_update['name']}",
+            "contact": f"updated_{person_to_update['contact']}",
+            "tags": ["Updated Tag", "New Team", "Floor 5"]
+        }
+
+        success, response = self.run_test(
+            f"Update Person: {person_to_update['name']}",
+            "PUT",
+            f"api/events/{self.created_event_id}/people/{person_to_update['id']}",
+            200,
+            data=update_data,
+            auth_required=True
+        )
+        
+        if success:
+            print(f"   Message: {response.get('message', 'No message')}")
+            return True
+        return False
+
+    def test_remove_person(self):
+        """Test removing a person from an event"""
+        if not self.created_event_id or not self.created_people:
+            print("❌ No event ID or people available for testing")
+            return False
+
+        person_to_remove = self.created_people[-1]  # Remove the last person
+        
+        success, response = self.run_test(
+            f"Remove Person: {person_to_remove['name']}",
+            "DELETE",
+            f"api/events/{self.created_event_id}/people/{person_to_remove['id']}",
+            200,
+            auth_required=True
+        )
+        
+        if success:
+            print(f"   Message: {response.get('message', 'No message')}")
+            # Remove from our local list
+            self.created_people = [p for p in self.created_people if p['id'] != person_to_remove['id']]
+            return True
+        return False
+
+    def test_excel_upload_simulation(self):
+        """Test Excel file upload endpoint (simulated with form data)"""
+        if not self.created_event_id:
+            print("❌ No event ID available for testing")
+            return False
+
+        # Since we can't easily create an actual Excel file in this test,
+        # we'll test the endpoint exists and returns appropriate error for missing file
+        url = f"{self.base_url}/api/events/{self.created_event_id}/people/bulk/excel"
+        headers = {'Authorization': f'Bearer {self.token}'}
+        
+        print(f"\n🔍 Testing Excel Upload Endpoint...")
+        print(f"   URL: {url}")
+        
+        try:
+            # Test without file (should fail)
+            response = requests.post(url, headers=headers)
+            
+            self.tests_run += 1
+            if response.status_code == 422:  # Unprocessable Entity (missing file)
+                self.tests_passed += 1
+                print(f"✅ Passed - Status: {response.status_code} (Expected error for missing file)")
+                try:
+                    error_data = response.json()
+                    print(f"   Error: {json.dumps(error_data, indent=2)}")
+                except:
+                    print(f"   Error: {response.text}")
+                return True
+            else:
+                print(f"❌ Failed - Expected 422, got {response.status_code}")
+                return False
+                
+        except Exception as e:
+            print(f"❌ Failed - Error: {str(e)}")
+            return False
+
     def test_error_cases(self):
         """Test error handling"""
         print(f"\n🔍 Testing Error Cases...")
         
         # Test non-existent event
         fake_event_id = "non-existent-event-id"
+        fake_person_id = "non-existent-person-id"
         
         error_tests = [
             ("Non-existent Event Details", "GET", f"api/events/{fake_event_id}", 404),
             ("Add Person to Non-existent Event", "POST", f"api/events/{fake_event_id}/people", 404),
             ("Get People from Non-existent Event", "GET", f"api/events/{fake_event_id}/people", 404),
             ("Respond to Non-existent Event", "POST", f"api/events/{fake_event_id}/respond", 404),
+            ("Update Non-existent Event", "PUT", f"api/events/{fake_event_id}", 404),
+            ("Duplicate Non-existent Event", "POST", f"api/events/{fake_event_id}/duplicate", 404),
+            ("Update Non-existent Person", "PUT", f"api/events/{self.created_event_id}/people/{fake_person_id}", 404),
+            ("Remove Non-existent Person", "DELETE", f"api/events/{self.created_event_id}/people/{fake_person_id}", 404),
         ]
         
         all_success = True
         for test_name, method, endpoint, expected_status in error_tests:
-            test_data = {"name": "Test", "contact": "test@test.com"} if method == "POST" else None
-            success, _ = self.run_test(test_name, method, endpoint, expected_status, data=test_data)
+            if method == "POST":
+                if "respond" in endpoint:
+                    test_data = {"person_id": "test", "person_name": "Test", "status": "safe"}
+                elif "duplicate" in endpoint:
+                    test_data = {"title": "Test", "description": "Test"}
+                else:
+                    test_data = {"name": "Test", "contact": "test@test.com"}
+            elif method == "PUT":
+                if "people" in endpoint:
+                    test_data = {"name": "Test", "contact": "test@test.com", "tags": []}
+                else:
+                    test_data = {"title": "Test", "description": "Test", "calamity_type": "flood"}
+            else:
+                test_data = None
+                
+            success, _ = self.run_test(test_name, method, endpoint, expected_status, data=test_data, auth_required=True)
             if not success:
                 all_success = False
                 
