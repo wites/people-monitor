@@ -19,14 +19,20 @@ class PeopleMonitorAPITester:
         self.test_password = "TestPass123!"
         self.test_name = "Test Admin"
 
-    def run_test(self, name, method, endpoint, expected_status, data=None, params=None):
+    def run_test(self, name, method, endpoint, expected_status, data=None, params=None, auth_required=False):
         """Run a single API test"""
         url = f"{self.base_url}/{endpoint}"
         headers = {'Content-Type': 'application/json'}
+        
+        # Add authentication header if required
+        if auth_required and self.token:
+            headers['Authorization'] = f'Bearer {self.token}'
 
         self.tests_run += 1
         print(f"\n🔍 Testing {name}...")
         print(f"   URL: {url}")
+        if auth_required:
+            print(f"   Auth: {'✓ Token provided' if self.token else '❌ No token'}")
         
         try:
             if method == 'GET':
