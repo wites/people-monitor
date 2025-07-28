@@ -40,6 +40,8 @@ function App() {
   });
 
   const [newTag, setNewTag] = useState('');
+  const [bulkData, setBulkData] = useState('');
+  const [bulkResult, setBulkResult] = useState(null);
 
   // Check authentication on app load
   useEffect(() => {
