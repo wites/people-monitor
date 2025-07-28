@@ -94,6 +94,9 @@ class AddPersonRequest(BaseModel):
     contact: str
     tags: List[str] = []
 
+class BulkAddPeopleRequest(BaseModel):
+    people: List[AddPersonRequest]
+
 class UpdateStatusRequest(BaseModel):
     person_id: str
     person_name: str
