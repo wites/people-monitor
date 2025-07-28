@@ -10,13 +10,19 @@ function App() {
   const [events, setEvents] = useState([]);
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [showCreateEvent, setShowCreateEvent] = useState(false);
+  const [showEditEvent, setShowEditEvent] = useState(false);
+  const [showDuplicateEvent, setShowDuplicateEvent] = useState(false);
   const [showAddPerson, setShowAddPerson] = useState(false);
+  const [showEditPerson, setShowEditPerson] = useState(false);
   const [showBulkAdd, setShowBulkAdd] = useState(false);
+  const [showExcelUpload, setShowExcelUpload] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
   const [isLogin, setIsLogin] = useState(true);
   const [eventStatistics, setEventStatistics] = useState(null);
   const [people, setPeople] = useState([]);
   const [responses, setResponses] = useState([]);
+  const [editingPerson, setEditingPerson] = useState(null);
+  const [currentEvent, setCurrentEvent] = useState(null);
 
   // Auth form
   const [authForm, setAuthForm] = useState({
@@ -32,6 +38,19 @@ function App() {
     calamity_type: 'flood'
   });
 
+  // Edit event form
+  const [editEventForm, setEditEventForm] = useState({
+    title: '',
+    description: '',
+    calamity_type: 'flood'
+  });
+
+  // Duplicate event form
+  const [duplicateEventForm, setDuplicateEventForm] = useState({
+    title: '',
+    description: ''
+  });
+
   // Add person form
   const [personForm, setPersonForm] = useState({
     name: '',
@@ -39,9 +58,20 @@ function App() {
     tags: []
   });
 
+  // Edit person form
+  const [editPersonForm, setEditPersonForm] = useState({
+    name: '',
+    contact: '',
+    tags: []
+  });
+
   const [newTag, setNewTag] = useState('');
+  const [editNewTag, setEditNewTag] = useState('');
   const [bulkData, setBulkData] = useState('');
   const [bulkResult, setBulkResult] = useState(null);
+  const [excelFile, setExcelFile] = useState(null);
+  const [excelResult, setExcelResult] = useState(null);
+  const [uploadingExcel, setUploadingExcel] = useState(false);
 
   // Check authentication on app load
   useEffect(() => {
@@ -157,17 +187,20 @@ function App() {
         'Authorization': `Bearer ${token}`
       };
 
-      const [peopleRes, statsRes, responsesRes] = await Promise.all([
+      const [eventRes, peopleRes, statsRes, responsesRes] = await Promise.all([
+        fetch(`${API_URL}/api/events/${selectedEvent}`, { headers }),
         fetch(`${API_URL}/api/events/${selectedEvent}/people`, { headers }),
         fetch(`${API_URL}/api/events/${selectedEvent}/statistics`, { headers }),
         fetch(`${API_URL}/api/events/${selectedEvent}/responses`, { headers })
       ]);
 
-      if (peopleRes.ok && statsRes.ok && responsesRes.ok) {
+      if (eventRes.ok && peopleRes.ok && statsRes.ok && responsesRes.ok) {
+        const eventData = await eventRes.json();
         const peopleData = await peopleRes.json();
         const statsData = await statsRes.json();
         const responsesData = await responsesRes.json();
 
+        setCurrentEvent(eventData);
         setPeople(peopleData);
         setEventStatistics(statsData);
         setResponses(responsesData);
@@ -200,6 +233,54 @@ function App() {
     }
   };
 
+  const updateEvent = async (e) => {
+    e.preventDefault();
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_URL}/api/events/${selectedEvent}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(editEventForm),
+      });
+
+      if (response.ok) {
+        setShowEditEvent(false);
+        setEditEventForm({ title: '', description: '', calamity_type: 'flood' });
+        fetchEvents();
+        fetchEventDetails();
+      }
+    } catch (error) {
+      console.error('Error updating event:', error);
+    }
+  };
+
+  const duplicateEvent = async (e) => {
+    e.preventDefault();
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_URL}/api/events/${selectedEvent}/duplicate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(duplicateEventForm),
+      });
+
+      if (response.ok) {
+        setShowDuplicateEvent(false);
+        setDuplicateEventForm({ title: '', description: '' });
+        fetchEvents();
+        alert('Event duplicated successfully!');
+      }
+    } catch (error) {
+      console.error('Error duplicating event:', error);
+    }
+  };
+
   const addPerson = async (e) => {
     e.preventDefault();
     try {
@@ -220,6 +301,83 @@ function App() {
       }
     } catch (error) {
       console.error('Error adding person:', error);
+    }
+  };
+
+  const updatePerson = async (e) => {
+    e.preventDefault();
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_URL}/api/events/${selectedEvent}/people/${editingPerson.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(editPersonForm),
+      });
+
+      if (response.ok) {
+        setShowEditPerson(false);
+        setEditingPerson(null);
+        setEditPersonForm({ name: '', contact: '', tags: [] });
+        fetchEventDetails();
+      }
+    } catch (error) {
+      console.error('Error updating person:', error);
+    }
+  };
+
+  const deletePerson = async (personId) => {
+    if (!confirm('Are you sure you want to remove this person from the event?')) {
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_URL}/api/events/${selectedEvent}/people/${personId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        fetchEventDetails();
+      }
+    } catch (error) {
+      console.error('Error deleting person:', error);
+    }
+  };
+
+  const openEditPerson = (person) => {
+    setEditingPerson(person);
+    setEditPersonForm({
+      name: person.name,
+      contact: person.contact,
+      tags: [...person.tags]
+    });
+    setShowEditPerson(true);
+  };
+
+  const openEditEvent = () => {
+    if (currentEvent) {
+      setEditEventForm({
+        title: currentEvent.title,
+        description: currentEvent.description,
+        calamity_type: currentEvent.calamity_type
+      });
+      setShowEditEvent(true);
+    }
+  };
+
+  const openDuplicateEvent = () => {
+    if (currentEvent) {
+      setDuplicateEventForm({
+        title: `Copy of ${currentEvent.title}`,
+        description: currentEvent.description
+      });
+      setShowDuplicateEvent(true);
     }
   };
 
@@ -276,6 +434,48 @@ function App() {
     }
   };
 
+  const uploadExcelFile = async (e) => {
+    e.preventDefault();
+    if (!excelFile) {
+      alert('Please select an Excel file');
+      return;
+    }
+
+    setUploadingExcel(true);
+    setExcelResult(null);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', excelFile);
+
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_URL}/api/events/${selectedEvent}/people/bulk/excel`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: formData,
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        setExcelResult(result);
+        if (result.added_count > 0) {
+          setExcelFile(null);
+          fetchEventDetails();
+        }
+      } else {
+        const error = await response.json();
+        alert(error.detail || 'Error uploading Excel file');
+      }
+    } catch (error) {
+      console.error('Error uploading Excel file:', error);
+      alert('Error uploading Excel file');
+    } finally {
+      setUploadingExcel(false);
+    }
+  };
+
   const addTag = () => {
     if (newTag.trim() && !personForm.tags.includes(newTag.trim())) {
       setPersonForm({
@@ -290,6 +490,23 @@ function App() {
     setPersonForm({
       ...personForm,
       tags: personForm.tags.filter(tag => tag !== tagToRemove)
+    });
+  };
+
+  const addEditTag = () => {
+    if (editNewTag.trim() && !editPersonForm.tags.includes(editNewTag.trim())) {
+      setEditPersonForm({
+        ...editPersonForm,
+        tags: [...editPersonForm.tags, editNewTag.trim()]
+      });
+      setEditNewTag('');
+    }
+  };
+
+  const removeEditTag = (tagToRemove) => {
+    setEditPersonForm({
+      ...editPersonForm,
+      tags: editPersonForm.tags.filter(tag => tag !== tagToRemove)
     });
   };
 
@@ -520,6 +737,18 @@ function App() {
               </button>
               <div className="flex gap-2">
                 <button
+                  onClick={openEditEvent}
+                  className="bg-yellow-500 text-white px-4 py-2 rounded-md hover:bg-yellow-600 transition-colors"
+                >
+                  Edit Event
+                </button>
+                <button
+                  onClick={openDuplicateEvent}
+                  className="bg-indigo-500 text-white px-4 py-2 rounded-md hover:bg-indigo-600 transition-colors"
+                >
+                  Duplicate
+                </button>
+                <button
                   onClick={generateShareLink}
                   className="bg-green-500 text-white px-4 py-2 rounded-md hover:bg-green-600 transition-colors"
                 >
@@ -536,6 +765,12 @@ function App() {
                   className="bg-purple-500 text-white px-4 py-2 rounded-md hover:bg-purple-600 transition-colors"
                 >
                   Bulk Add
+                </button>
+                <button
+                  onClick={() => setShowExcelUpload(true)}
+                  className="bg-orange-500 text-white px-4 py-2 rounded-md hover:bg-orange-600 transition-colors"
+                >
+                  Excel Upload
                 </button>
               </div>
             </div>
@@ -597,21 +832,37 @@ function App() {
                           </div>
                         )}
                       </div>
-                      <div className="text-right">
-                        <div className={`font-medium ${getStatusColor(status)}`}>
-                          {status === 'safe' ? 'Safe' : 
-                           status === 'need_help' ? 'Need Help' : 'No Response'}
+                      <div className="flex items-center gap-4">
+                        <div className="text-right">
+                          <div className={`font-medium ${getStatusColor(status)}`}>
+                            {status === 'safe' ? 'Safe' : 
+                             status === 'need_help' ? 'Need Help' : 'No Response'}
+                          </div>
+                          {response && (
+                            <div className="text-sm text-gray-500">
+                              {new Date(response.response_time).toLocaleString()}
+                            </div>
+                          )}
+                          {response && response.message && (
+                            <div className="text-sm text-gray-600 mt-1 italic">
+                              "{response.message}"
+                            </div>
+                          )}
                         </div>
-                        {response && (
-                          <div className="text-sm text-gray-500">
-                            {new Date(response.response_time).toLocaleString()}
-                          </div>
-                        )}
-                        {response && response.message && (
-                          <div className="text-sm text-gray-600 mt-1 italic">
-                            "{response.message}"
-                          </div>
-                        )}
+                        <div className="flex flex-col gap-1">
+                          <button
+                            onClick={() => openEditPerson(person)}
+                            className="text-blue-500 hover:text-blue-700 text-sm"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => deletePerson(person.id)}
+                            className="text-red-500 hover:text-red-700 text-sm"
+                          >
+                            Remove
+                          </button>
+                        </div>
                       </div>
                     </div>
                   );
@@ -672,6 +923,118 @@ function App() {
                   <button
                     type="button"
                     onClick={() => setShowCreateEvent(false)}
+                    className="flex-1 bg-gray-500 text-white py-2 px-4 rounded-md hover:bg-gray-600 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Edit Event Modal */}
+        {showEditEvent && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+              <h3 className="text-xl font-semibold text-gray-800 mb-4">Edit Event</h3>
+              <form onSubmit={updateEvent}>
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Event Title</label>
+                  <input
+                    type="text"
+                    value={editEventForm.title}
+                    onChange={(e) => setEditEventForm({...editEventForm, title: e.target.value})}
+                    className="w-full p-2 border border-gray-300 rounded-md"
+                    required
+                  />
+                </div>
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
+                  <textarea
+                    value={editEventForm.description}
+                    onChange={(e) => setEditEventForm({...editEventForm, description: e.target.value})}
+                    className="w-full p-2 border border-gray-300 rounded-md"
+                    rows="3"
+                    required
+                  />
+                </div>
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Calamity Type</label>
+                  <select
+                    value={editEventForm.calamity_type}
+                    onChange={(e) => setEditEventForm({...editEventForm, calamity_type: e.target.value})}
+                    className="w-full p-2 border border-gray-300 rounded-md"
+                  >
+                    <option value="flood">Flood</option>
+                    <option value="typhoon">Typhoon</option>
+                    <option value="storm">Storm</option>
+                    <option value="earthquake">Earthquake</option>
+                    <option value="fire">Fire</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="submit"
+                    className="flex-1 bg-yellow-500 text-white py-2 px-4 rounded-md hover:bg-yellow-600 transition-colors"
+                  >
+                    Update Event
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowEditEvent(false)}
+                    className="flex-1 bg-gray-500 text-white py-2 px-4 rounded-md hover:bg-gray-600 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Duplicate Event Modal */}
+        {showDuplicateEvent && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+              <h3 className="text-xl font-semibold text-gray-800 mb-4">Duplicate Event</h3>
+              <form onSubmit={duplicateEvent}>
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">New Event Title</label>
+                  <input
+                    type="text"
+                    value={duplicateEventForm.title}
+                    onChange={(e) => setDuplicateEventForm({...duplicateEventForm, title: e.target.value})}
+                    className="w-full p-2 border border-gray-300 rounded-md"
+                    required
+                  />
+                </div>
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">New Description</label>
+                  <textarea
+                    value={duplicateEventForm.description}
+                    onChange={(e) => setDuplicateEventForm({...duplicateEventForm, description: e.target.value})}
+                    className="w-full p-2 border border-gray-300 rounded-md"
+                    rows="3"
+                    required
+                  />
+                </div>
+                <div className="mb-4 p-3 bg-blue-50 rounded-md">
+                  <p className="text-sm text-blue-700">
+                    This will create a new event with the same calamity type and all the people from the current event.
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="submit"
+                    className="flex-1 bg-indigo-500 text-white py-2 px-4 rounded-md hover:bg-indigo-600 transition-colors"
+                  >
+                    Duplicate Event
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowDuplicateEvent(false)}
                     className="flex-1 bg-gray-500 text-white py-2 px-4 rounded-md hover:bg-gray-600 transition-colors"
                   >
                     Cancel
@@ -762,6 +1125,86 @@ function App() {
           </div>
         )}
 
+        {/* Edit Person Modal */}
+        {showEditPerson && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+              <h3 className="text-xl font-semibold text-gray-800 mb-4">Edit Person</h3>
+              <form onSubmit={updatePerson}>
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Name</label>
+                  <input
+                    type="text"
+                    value={editPersonForm.name}
+                    onChange={(e) => setEditPersonForm({...editPersonForm, name: e.target.value})}
+                    className="w-full p-2 border border-gray-300 rounded-md"
+                    required
+                  />
+                </div>
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Contact</label>
+                  <input
+                    type="text"
+                    value={editPersonForm.contact}
+                    onChange={(e) => setEditPersonForm({...editPersonForm, contact: e.target.value})}
+                    className="w-full p-2 border border-gray-300 rounded-md"
+                    placeholder="Phone, Email, or other contact info"
+                    required
+                  />
+                </div>
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Tags/Teams</label>
+                  <div className="flex gap-2 mb-2">
+                    <input
+                      type="text"
+                      value={editNewTag}
+                      onChange={(e) => setEditNewTag(e.target.value)}
+                      className="flex-1 p-2 border border-gray-300 rounded-md"
+                      placeholder="Add tag (e.g., IT Team, Floor 3)"
+                    />
+                    <button
+                      type="button"
+                      onClick={addEditTag}
+                      className="bg-blue-500 text-white px-3 py-2 rounded-md hover:bg-blue-600 transition-colors"
+                    >
+                      Add
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {editPersonForm.tags.map((tag) => (
+                      <span key={tag} className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-sm flex items-center gap-1">
+                        {tag}
+                        <button
+                          type="button"
+                          onClick={() => removeEditTag(tag)}
+                          className="text-blue-600 hover:text-blue-800"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="submit"
+                    className="flex-1 bg-yellow-500 text-white py-2 px-4 rounded-md hover:bg-yellow-600 transition-colors"
+                  >
+                    Update Person
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowEditPerson(false)}
+                    className="flex-1 bg-gray-500 text-white py-2 px-4 rounded-md hover:bg-gray-600 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
         {/* Bulk Add People Modal */}
         {showBulkAdd && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -832,6 +1275,107 @@ Mike Johnson, mike@company.com, IT Team"
                       setShowBulkAdd(false);
                       setBulkData('');
                       setBulkResult(null);
+                    }}
+                    className="flex-1 bg-gray-500 text-white py-2 px-4 rounded-md hover:bg-gray-600 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Excel Upload Modal */}
+        {showExcelUpload && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
+              <h3 className="text-xl font-semibold text-gray-800 mb-4">Excel Upload</h3>
+              
+              <div className="mb-4 p-4 bg-orange-50 rounded-lg">
+                <h4 className="font-medium text-orange-800 mb-2">Excel Format Requirements:</h4>
+                <ul className="text-sm text-orange-700 mb-2 space-y-1">
+                  <li>• Required columns: <strong>Name</strong>, <strong>Contact</strong></li>
+                  <li>• Optional columns: <strong>Tags</strong> (comma-separated) or <strong>Tag1</strong>, <strong>Tag2</strong>, etc.</li>
+                  <li>• File must be .xlsx or .xls format</li>
+                  <li>• First row should contain column headers</li>
+                </ul>
+                <p className="text-sm text-orange-700">Example:</p>
+                <div className="text-xs text-orange-600 bg-orange-100 px-2 py-1 rounded mt-1">
+                  <table className="w-full">
+                    <thead>
+                      <tr>
+                        <th className="text-left">Name</th>
+                        <th className="text-left">Contact</th>
+                        <th className="text-left">Tags</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td>John Doe</td>
+                        <td>john@company.com</td>
+                        <td>IT Team, Floor 3</td>
+                      </tr>
+                      <tr>
+                        <td>Jane Smith</td>
+                        <td>jane@company.com</td>
+                        <td>HR Team, Floor 2</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              
+              <form onSubmit={uploadExcelFile}>
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Select Excel File
+                  </label>
+                  <input
+                    type="file"
+                    accept=".xlsx,.xls"
+                    onChange={(e) => setExcelFile(e.target.files[0])}
+                    className="w-full p-2 border border-gray-300 rounded-md"
+                    required
+                  />
+                </div>
+                
+                {excelResult && (
+                  <div className="mb-4 p-4 bg-gray-50 rounded-lg">
+                    <h4 className="font-medium text-gray-800 mb-2">Excel Upload Result:</h4>
+                    <p className="text-sm text-green-600 mb-1">
+                      ✅ Successfully added: {excelResult.added_count} people
+                    </p>
+                    <p className="text-sm text-gray-600 mb-2">
+                      Total rows processed: {excelResult.total_rows}
+                    </p>
+                    {excelResult.errors && excelResult.errors.length > 0 && (
+                      <div>
+                        <p className="text-sm text-red-600 mb-1">❌ Errors:</p>
+                        <ul className="text-xs text-red-500 ml-4 max-h-32 overflow-y-auto">
+                          {excelResult.errors.map((error, idx) => (
+                            <li key={idx}>• {error}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                )}
+                
+                <div className="flex gap-2">
+                  <button
+                    type="submit"
+                    disabled={uploadingExcel}
+                    className="flex-1 bg-orange-500 text-white py-2 px-4 rounded-md hover:bg-orange-600 transition-colors disabled:opacity-50"
+                  >
+                    {uploadingExcel ? 'Uploading...' : 'Upload Excel File'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowExcelUpload(false);
+                      setExcelFile(null);
+                      setExcelResult(null);
                     }}
                     className="flex-1 bg-gray-500 text-white py-2 px-4 rounded-md hover:bg-gray-600 transition-colors"
                   >
