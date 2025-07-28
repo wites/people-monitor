@@ -282,7 +282,7 @@ class PeopleMonitorAPITester:
             print("❌ No event ID available for testing")
             return False
             
-        url = f"{self.base_url}/respond/{self.created_event_id}"
+        url = f"{self.base_url}/api/respond/{self.created_event_id}"
         print(f"\n🔍 Testing Public Response Page...")
         print(f"   URL: {url}")
         
