@@ -714,12 +714,20 @@ async def get_share_link(event_id: str, current_user: dict = Depends(get_current
 
 @app.delete("/api/events/{event_id}")
 async def delete_event(event_id: str, current_user: dict = Depends(get_current_user)):
+    # Check if event exists and belongs to user
+    event = events_collection.find_one({"id": event_id, "created_by": current_user["id"]})
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+    
+    # Soft delete the event
     result = events_collection.update_one(
         {"id": event_id, "created_by": current_user["id"]},
         {"$set": {"is_active": False}}
     )
-    if result.matched_count == 0:
-        raise HTTPException(status_code=404, detail="Event not found")
+    
+    # Also remove all responses associated with this event
+    responses_collection.delete_many({"event_id": event_id})
+    
     return {"message": "Event deleted successfully"}
 
 if __name__ == "__main__":
