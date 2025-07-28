@@ -223,6 +223,59 @@ function App() {
     }
   };
 
+  const bulkAddPeople = async (e) => {
+    e.preventDefault();
+    setBulkResult(null);
+    
+    try {
+      // Parse the bulk data
+      const lines = bulkData.trim().split('\n').filter(line => line.trim());
+      const people = [];
+      
+      for (const line of lines) {
+        const parts = line.split(',').map(part => part.trim());
+        if (parts.length >= 2) {
+          const person = {
+            name: parts[0],
+            contact: parts[1],
+            tags: parts.slice(2).filter(tag => tag.length > 0)
+          };
+          people.push(person);
+        }
+      }
+      
+      if (people.length === 0) {
+        alert('No valid people data found. Please check the format.');
+        return;
+      }
+      
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_URL}/api/events/${selectedEvent}/people/bulk`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ people }),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        setBulkResult(result);
+        if (result.added_count > 0) {
+          setBulkData('');
+          fetchEventDetails();
+        }
+      } else {
+        const error = await response.json();
+        alert(error.detail || 'Error adding people');
+      }
+    } catch (error) {
+      console.error('Error bulk adding people:', error);
+      alert('Error processing bulk data');
+    }
+  };
+
   const addTag = () => {
     if (newTag.trim() && !personForm.tags.includes(newTag.trim())) {
       setPersonForm({
