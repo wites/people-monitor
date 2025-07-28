@@ -267,7 +267,8 @@ class PeopleMonitorAPITester:
             "Generate Share Link",
             "GET",
             f"api/events/{self.created_event_id}/share",
-            200
+            200,
+            auth_required=True
         )
         
         if success and 'share_url' in response:
