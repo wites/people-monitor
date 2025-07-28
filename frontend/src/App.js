@@ -761,6 +761,87 @@ function App() {
             </div>
           </div>
         )}
+
+        {/* Bulk Add People Modal */}
+        {showBulkAdd && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
+              <h3 className="text-xl font-semibold text-gray-800 mb-4">Bulk Add People</h3>
+              
+              <div className="mb-4 p-4 bg-blue-50 rounded-lg">
+                <h4 className="font-medium text-blue-800 mb-2">Instructions:</h4>
+                <p className="text-sm text-blue-700 mb-2">
+                  Enter one person per line in the format: <strong>Name, Contact, Tag1, Tag2, ...</strong>
+                </p>
+                <p className="text-sm text-blue-700 mb-2">Example:</p>
+                <code className="text-xs text-blue-600 bg-blue-100 px-2 py-1 rounded">
+                  John Doe, john@company.com, IT Team, Floor 3<br/>
+                  Jane Smith, jane@company.com, HR Team, Floor 2<br/>
+                  Mike Johnson, mike@company.com, IT Team
+                </code>
+              </div>
+              
+              <form onSubmit={bulkAddPeople}>
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    People Data (one per line)
+                  </label>
+                  <textarea
+                    value={bulkData}
+                    onChange={(e) => setBulkData(e.target.value)}
+                    className="w-full p-3 border border-gray-300 rounded-md h-40 font-mono text-sm"
+                    placeholder="John Doe, john@company.com, IT Team, Floor 3
+Jane Smith, jane@company.com, HR Team, Floor 2
+Mike Johnson, mike@company.com, IT Team"
+                    required
+                  />
+                </div>
+                
+                {bulkResult && (
+                  <div className="mb-4 p-4 bg-gray-50 rounded-lg">
+                    <h4 className="font-medium text-gray-800 mb-2">Bulk Add Result:</h4>
+                    <p className="text-sm text-green-600 mb-1">
+                      ✅ Successfully added: {bulkResult.added_count} people
+                    </p>
+                    <p className="text-sm text-gray-600 mb-2">
+                      Total requested: {bulkResult.total_requested}
+                    </p>
+                    {bulkResult.errors && bulkResult.errors.length > 0 && (
+                      <div>
+                        <p className="text-sm text-red-600 mb-1">❌ Errors:</p>
+                        <ul className="text-xs text-red-500 ml-4">
+                          {bulkResult.errors.map((error, idx) => (
+                            <li key={idx}>• {error}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                )}
+                
+                <div className="flex gap-2">
+                  <button
+                    type="submit"
+                    className="flex-1 bg-purple-500 text-white py-2 px-4 rounded-md hover:bg-purple-600 transition-colors"
+                  >
+                    Add All People
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowBulkAdd(false);
+                      setBulkData('');
+                      setBulkResult(null);
+                    }}
+                    className="flex-1 bg-gray-500 text-white py-2 px-4 rounded-md hover:bg-gray-600 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
