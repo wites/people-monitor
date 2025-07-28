@@ -404,6 +404,142 @@ class PeopleMonitorAPITester:
             return True
         return False
 
+    def test_bulk_add_people_valid(self):
+        """Test bulk adding people with valid data"""
+        if not self.created_event_id:
+            print("❌ No event ID available for testing")
+            return False
+
+        # Test data for bulk add
+        bulk_people_data = {
+            "people": [
+                {"name": "Alice Johnson", "contact": "alice@company.com", "tags": ["Marketing", "Floor 4"]},
+                {"name": "Bob Wilson", "contact": "bob@company.com", "tags": ["Sales", "Floor 5"]},
+                {"name": "Carol Davis", "contact": "carol@company.com", "tags": ["Marketing"]},
+                {"name": "Dan Miller", "contact": "dan@company.com", "tags": ["Sales", "Floor 5", "Team Lead"]},
+                {"name": "Eva Brown", "contact": "eva@company.com", "tags": []}
+            ]
+        }
+
+        success, response = self.run_test(
+            "Bulk Add People (Valid Data)",
+            "POST",
+            f"api/events/{self.created_event_id}/people/bulk",
+            200,
+            data=bulk_people_data,
+            auth_required=True
+        )
+        
+        if success:
+            print(f"   Added Count: {response.get('added_count', 0)}")
+            print(f"   Total Requested: {response.get('total_requested', 0)}")
+            print(f"   Errors: {len(response.get('errors', []))}")
+            print(f"   Message: {response.get('message', 'No message')}")
+            
+            # Verify all people were added successfully
+            expected_count = len(bulk_people_data['people'])
+            if response.get('added_count') == expected_count and len(response.get('errors', [])) == 0:
+                print("   ✓ All people added successfully")
+                return True
+            else:
+                print("   ⚠ Some people may not have been added")
+                return False
+        return False
+
+    def test_bulk_add_people_mixed_data(self):
+        """Test bulk adding people with mixed valid/invalid data"""
+        if not self.created_event_id:
+            print("❌ No event ID available for testing")
+            return False
+
+        # Test data with some invalid entries
+        bulk_people_data = {
+            "people": [
+                {"name": "Valid Person 1", "contact": "valid1@company.com", "tags": ["IT"]},
+                {"name": "", "contact": "invalid1@company.com", "tags": ["HR"]},  # Invalid: empty name
+                {"name": "Valid Person 2", "contact": "", "tags": ["Finance"]},  # Invalid: empty contact
+                {"name": "Valid Person 3", "contact": "valid3@company.com", "tags": ["IT", "Senior"]},
+                {"name": "", "contact": "", "tags": ["Admin"]}  # Invalid: both empty
+            ]
+        }
+
+        success, response = self.run_test(
+            "Bulk Add People (Mixed Valid/Invalid Data)",
+            "POST",
+            f"api/events/{self.created_event_id}/people/bulk",
+            200,
+            data=bulk_people_data,
+            auth_required=True
+        )
+        
+        if success:
+            print(f"   Added Count: {response.get('added_count', 0)}")
+            print(f"   Total Requested: {response.get('total_requested', 0)}")
+            print(f"   Errors: {len(response.get('errors', []))}")
+            print(f"   Message: {response.get('message', 'No message')}")
+            
+            # Should have added 2 valid people and have 3 errors
+            if response.get('added_count') == 2 and len(response.get('errors', [])) == 3:
+                print("   ✓ Correctly handled mixed valid/invalid data")
+                return True
+            else:
+                print("   ⚠ Unexpected results for mixed data")
+                return False
+        return False
+
+    def test_bulk_add_people_empty_data(self):
+        """Test bulk adding people with empty data"""
+        if not self.created_event_id:
+            print("❌ No event ID available for testing")
+            return False
+
+        # Test with empty people array
+        bulk_people_data = {"people": []}
+
+        success, response = self.run_test(
+            "Bulk Add People (Empty Data)",
+            "POST",
+            f"api/events/{self.created_event_id}/people/bulk",
+            200,
+            data=bulk_people_data,
+            auth_required=True
+        )
+        
+        if success:
+            print(f"   Added Count: {response.get('added_count', 0)}")
+            print(f"   Total Requested: {response.get('total_requested', 0)}")
+            print(f"   Message: {response.get('message', 'No message')}")
+            
+            # Should have added 0 people
+            if response.get('added_count') == 0 and response.get('total_requested') == 0:
+                print("   ✓ Correctly handled empty data")
+                return True
+            else:
+                print("   ⚠ Unexpected results for empty data")
+                return False
+        return False
+
+    def test_bulk_add_people_nonexistent_event(self):
+        """Test bulk adding people to non-existent event"""
+        fake_event_id = "non-existent-event-id"
+        
+        bulk_people_data = {
+            "people": [
+                {"name": "Test Person", "contact": "test@company.com", "tags": ["Test"]}
+            ]
+        }
+
+        success, _ = self.run_test(
+            "Bulk Add People (Non-existent Event)",
+            "POST",
+            f"api/events/{fake_event_id}/people/bulk",
+            404,
+            data=bulk_people_data,
+            auth_required=True
+        )
+        
+        return success
+
     def test_error_cases(self):
         """Test error handling"""
         print(f"\n🔍 Testing Error Cases...")
