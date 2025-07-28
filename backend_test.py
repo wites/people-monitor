@@ -428,8 +428,8 @@ class PeopleMonitorAPITester:
         return all_success
 
 def main():
-    print("🚀 Starting People Monitor API Tests")
-    print("=" * 50)
+    print("🚀 Starting People Monitor API Tests with Authentication")
+    print("=" * 60)
     
     tester = PeopleMonitorAPITester()
     
@@ -438,22 +438,35 @@ def main():
     
     # Basic functionality tests
     test_results.append(("Root Endpoint", tester.test_root_endpoint()))
+    
+    # Authentication tests
+    test_results.append(("User Registration", tester.test_user_registration()))
+    test_results.append(("Get Current User", tester.test_get_current_user()))
+    test_results.append(("User Login", tester.test_user_login()))
+    test_results.append(("Get Current User (after login)", tester.test_get_current_user()))
+    test_results.append(("Unauthorized Access", tester.test_unauthorized_access()))
+    
+    # Protected admin functionality tests
     test_results.append(("Create Event", tester.test_create_event()))
     test_results.append(("Get Events", tester.test_get_events()))
     test_results.append(("Get Specific Event", tester.test_get_specific_event()))
     test_results.append(("Add People to Event", tester.test_add_people_to_event()))
     test_results.append(("Get Event People", tester.test_get_event_people()))
     test_results.append(("Generate Share Link", tester.test_generate_share_link()))
+    
+    # Public response functionality (no auth required)
     test_results.append(("Public Response Page", tester.test_public_response_page()))
     test_results.append(("Status Responses", tester.test_status_responses()))
+    
+    # Admin monitoring (auth required)
     test_results.append(("Get Event Responses", tester.test_get_event_responses()))
     test_results.append(("Event Statistics", tester.test_event_statistics()))
     test_results.append(("Error Cases", tester.test_error_cases()))
 
     # Print summary
-    print("\n" + "=" * 50)
+    print("\n" + "=" * 60)
     print("📊 TEST SUMMARY")
-    print("=" * 50)
+    print("=" * 60)
     
     for test_name, result in test_results:
         status = "✅ PASS" if result else "❌ FAIL"
@@ -463,7 +476,10 @@ def main():
     
     if tester.created_event_id:
         print(f"\n🔗 Test Event Created: {tester.created_event_id}")
-        print(f"   Public Response URL: {tester.base_url}/respond/{tester.created_event_id}")
+        print(f"   Public Response URL: {tester.base_url}/api/respond/{tester.created_event_id}")
+    
+    if tester.token:
+        print(f"\n🔑 Authentication Token: {tester.token[:30]}...")
     
     return 0 if tester.tests_passed == tester.tests_run else 1
 
