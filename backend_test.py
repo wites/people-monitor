@@ -221,7 +221,8 @@ class PeopleMonitorAPITester:
                 "POST",
                 f"api/events/{self.created_event_id}/people",
                 200,
-                data=person_data
+                data=person_data,
+                auth_required=True
             )
             
             if success and 'person_id' in response:
