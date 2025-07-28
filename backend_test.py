@@ -588,6 +588,13 @@ def main():
     test_results.append(("Get Specific Event", tester.test_get_specific_event()))
     test_results.append(("Add People to Event", tester.test_add_people_to_event()))
     test_results.append(("Get Event People", tester.test_get_event_people()))
+    
+    # Bulk add people tests
+    test_results.append(("Bulk Add People (Valid Data)", tester.test_bulk_add_people_valid()))
+    test_results.append(("Bulk Add People (Mixed Data)", tester.test_bulk_add_people_mixed_data()))
+    test_results.append(("Bulk Add People (Empty Data)", tester.test_bulk_add_people_empty_data()))
+    test_results.append(("Bulk Add People (Non-existent Event)", tester.test_bulk_add_people_nonexistent_event()))
+    
     test_results.append(("Generate Share Link", tester.test_generate_share_link()))
     
     # Public response functionality (no auth required)
