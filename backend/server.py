@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, status, Depends, Request
+from fastapi import FastAPI, HTTPException, status, Depends, Request, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -13,6 +13,8 @@ from bson import ObjectId
 import jwt
 import bcrypt
 from passlib.context import CryptContext
+import pandas as pd
+import io
 
 app = FastAPI()
 
@@ -89,7 +91,17 @@ class CreateEventRequest(BaseModel):
     description: str
     calamity_type: str
 
+class UpdateEventRequest(BaseModel):
+    title: str
+    description: str
+    calamity_type: str
+
 class AddPersonRequest(BaseModel):
+    name: str
+    contact: str
+    tags: List[str] = []
+
+class UpdatePersonRequest(BaseModel):
     name: str
     contact: str
     tags: List[str] = []
@@ -102,6 +114,10 @@ class UpdateStatusRequest(BaseModel):
     person_name: str
     status: str
     message: Optional[str] = None
+
+class DuplicateEventRequest(BaseModel):
+    title: str
+    description: str
 
 # Helper functions
 def serialize_doc(doc):
@@ -400,6 +416,46 @@ async def get_event(event_id: str, current_user: dict = Depends(get_current_user
     event = serialize_doc(event)
     return event
 
+@app.put("/api/events/{event_id}")
+async def update_event(event_id: str, request: UpdateEventRequest, current_user: dict = Depends(get_current_user)):
+    event = events_collection.find_one({"id": event_id, "created_by": current_user["id"]})
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+    
+    # Update event details
+    events_collection.update_one(
+        {"id": event_id, "created_by": current_user["id"]},
+        {"$set": {
+            "title": request.title,
+            "description": request.description,
+            "calamity_type": request.calamity_type
+        }}
+    )
+    
+    return {"message": "Event updated successfully"}
+
+@app.post("/api/events/{event_id}/duplicate")
+async def duplicate_event(event_id: str, request: DuplicateEventRequest, current_user: dict = Depends(get_current_user)):
+    original_event = events_collection.find_one({"id": event_id, "created_by": current_user["id"]})
+    if not original_event:
+        raise HTTPException(status_code=404, detail="Event not found")
+    
+    # Create new event with same people
+    new_event_id = str(uuid.uuid4())
+    new_event = {
+        "id": new_event_id,
+        "title": request.title,
+        "description": request.description,
+        "calamity_type": original_event["calamity_type"],
+        "created_at": datetime.now(),
+        "created_by": current_user["id"],
+        "people": original_event.get("people", []),  # Copy all people
+        "is_active": True
+    }
+    
+    events_collection.insert_one(new_event)
+    return {"event_id": new_event_id, "message": "Event duplicated successfully"}
+
 @app.post("/api/events/{event_id}/people")
 async def add_person_to_event(event_id: str, request: AddPersonRequest, current_user: dict = Depends(get_current_user)):
     event = events_collection.find_one({"id": event_id, "created_by": current_user["id"]})
@@ -420,6 +476,46 @@ async def add_person_to_event(event_id: str, request: AddPersonRequest, current_
     )
     
     return {"person_id": person_id, "message": "Person added successfully"}
+
+@app.put("/api/events/{event_id}/people/{person_id}")
+async def update_person_in_event(event_id: str, person_id: str, request: UpdatePersonRequest, current_user: dict = Depends(get_current_user)):
+    event = events_collection.find_one({"id": event_id, "created_by": current_user["id"]})
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+    
+    # Check if person exists in event
+    person_exists = any(p["id"] == person_id for p in event.get("people", []))
+    if not person_exists:
+        raise HTTPException(status_code=404, detail="Person not found in event")
+    
+    # Update person in the people array
+    events_collection.update_one(
+        {"id": event_id, "people.id": person_id},
+        {"$set": {
+            "people.$.name": request.name,
+            "people.$.contact": request.contact,
+            "people.$.tags": request.tags
+        }}
+    )
+    
+    return {"message": "Person updated successfully"}
+
+@app.delete("/api/events/{event_id}/people/{person_id}")
+async def remove_person_from_event(event_id: str, person_id: str, current_user: dict = Depends(get_current_user)):
+    event = events_collection.find_one({"id": event_id, "created_by": current_user["id"]})
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+    
+    # Remove person from event
+    events_collection.update_one(
+        {"id": event_id},
+        {"$pull": {"people": {"id": person_id}}}
+    )
+    
+    # Also remove any responses from this person
+    responses_collection.delete_many({"event_id": event_id, "person_id": person_id})
+    
+    return {"message": "Person removed successfully"}
 
 @app.post("/api/events/{event_id}/people/bulk")
 async def bulk_add_people_to_event(event_id: str, request: BulkAddPeopleRequest, current_user: dict = Depends(get_current_user)):
@@ -467,6 +563,86 @@ async def bulk_add_people_to_event(event_id: str, request: BulkAddPeopleRequest,
         result["message"] += f" with {len(errors)} errors"
     
     return result
+
+@app.post("/api/events/{event_id}/people/bulk/excel")
+async def bulk_add_people_from_excel(event_id: str, file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
+    event = events_collection.find_one({"id": event_id, "created_by": current_user["id"]})
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+    
+    # Validate file type
+    if not file.filename.endswith(('.xlsx', '.xls')):
+        raise HTTPException(status_code=400, detail="Please upload an Excel file (.xlsx or .xls)")
+    
+    try:
+        # Read Excel file
+        content = await file.read()
+        df = pd.read_excel(io.BytesIO(content))
+        
+        # Expected columns: Name, Contact, Tags (optional)
+        if 'Name' not in df.columns or 'Contact' not in df.columns:
+            raise HTTPException(status_code=400, detail="Excel file must have 'Name' and 'Contact' columns")
+        
+        added_people = []
+        errors = []
+        
+        for index, row in df.iterrows():
+            try:
+                # Parse data
+                name = str(row['Name']).strip() if pd.notna(row['Name']) else ""
+                contact = str(row['Contact']).strip() if pd.notna(row['Contact']) else ""
+                
+                # Parse tags - could be comma-separated or in separate columns
+                tags = []
+                if 'Tags' in df.columns and pd.notna(row['Tags']):
+                    tags = [tag.strip() for tag in str(row['Tags']).split(',') if tag.strip()]
+                
+                # Check for additional tag columns (Tag1, Tag2, etc.)
+                for col in df.columns:
+                    if col.startswith('Tag') and col != 'Tags' and pd.notna(row[col]):
+                        tag = str(row[col]).strip()
+                        if tag and tag not in tags:
+                            tags.append(tag)
+                
+                # Validation
+                if not name or not contact:
+                    errors.append(f"Row {index+2}: Name and contact are required")
+                    continue
+                
+                person_id = str(uuid.uuid4())
+                person = {
+                    "id": person_id,
+                    "name": name,
+                    "contact": contact,
+                    "tags": tags
+                }
+                
+                added_people.append(person)
+                
+            except Exception as e:
+                errors.append(f"Row {index+2}: {str(e)}")
+        
+        # Add people to event
+        if added_people:
+            events_collection.update_one(
+                {"id": event_id},
+                {"$push": {"people": {"$each": added_people}}}
+            )
+        
+        result = {
+            "added_count": len(added_people),
+            "total_rows": len(df),
+            "errors": errors,
+            "message": f"Successfully added {len(added_people)} people from Excel file"
+        }
+        
+        if errors:
+            result["message"] += f" with {len(errors)} errors"
+        
+        return result
+        
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error processing Excel file: {str(e)}")
 
 @app.get("/api/events/{event_id}/people")
 async def get_event_people(event_id: str, current_user: dict = Depends(get_current_user)):
