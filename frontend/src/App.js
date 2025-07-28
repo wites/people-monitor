@@ -1,5 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import './App.css';
+import { Button } from './components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from './components/ui/dialog';
+import { AlertDialog, AlertDialogTrigger, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel } from './components/ui/alert-dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
+import { Edit, Trash2, Copy, Share, Plus, Upload, UserPlus, MoreHorizontal } from 'lucide-react';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8001';
 
@@ -15,7 +20,6 @@ function App() {
   const [showAddPerson, setShowAddPerson] = useState(false);
   const [showEditPerson, setShowEditPerson] = useState(false);
   const [showBulkAdd, setShowBulkAdd] = useState(false);
-  const [showExcelUpload, setShowExcelUpload] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
   const [isLogin, setIsLogin] = useState(true);
   const [eventStatistics, setEventStatistics] = useState(null);
@@ -23,6 +27,7 @@ function App() {
   const [responses, setResponses] = useState([]);
   const [editingPerson, setEditingPerson] = useState(null);
   const [currentEvent, setCurrentEvent] = useState(null);
+  const [deleteEventId, setDeleteEventId] = useState(null);
 
   // Auth form
   const [authForm, setAuthForm] = useState({
@@ -72,6 +77,7 @@ function App() {
   const [excelFile, setExcelFile] = useState(null);
   const [excelResult, setExcelResult] = useState(null);
   const [uploadingExcel, setUploadingExcel] = useState(false);
+  const [bulkMethod, setBulkMethod] = useState('text'); // 'text' or 'excel'
 
   // Check authentication on app load
   useEffect(() => {
@@ -257,6 +263,30 @@ function App() {
     }
   };
 
+  const deleteEvent = async () => {
+    if (!deleteEventId) return;
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_URL}/api/events/${deleteEventId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        setDeleteEventId(null);
+        if (selectedEvent === deleteEventId) {
+          setSelectedEvent(null);
+        }
+        fetchEvents();
+      }
+    } catch (error) {
+      console.error('Error deleting event:', error);
+    }
+  };
+
   const duplicateEvent = async (e) => {
     e.preventDefault();
     try {
@@ -329,10 +359,6 @@ function App() {
   };
 
   const deletePerson = async (personId) => {
-    if (!confirm('Are you sure you want to remove this person from the event?')) {
-      return;
-    }
-
     try {
       const token = localStorage.getItem('token');
       const response = await fetch(`${API_URL}/api/events/${selectedEvent}/people/${personId}`, {
@@ -381,10 +407,19 @@ function App() {
     }
   };
 
-  const bulkAddPeople = async (e) => {
+  const handleBulkAdd = async (e) => {
     e.preventDefault();
     setBulkResult(null);
+    setExcelResult(null);
     
+    if (bulkMethod === 'text') {
+      await bulkAddPeople();
+    } else {
+      await uploadExcelFile();
+    }
+  };
+
+  const bulkAddPeople = async () => {
     try {
       // Parse the bulk data
       const lines = bulkData.trim().split('\n').filter(line => line.trim());
@@ -434,15 +469,13 @@ function App() {
     }
   };
 
-  const uploadExcelFile = async (e) => {
-    e.preventDefault();
+  const uploadExcelFile = async () => {
     if (!excelFile) {
       alert('Please select an Excel file');
       return;
     }
 
     setUploadingExcel(true);
-    setExcelResult(null);
 
     try {
       const formData = new FormData();
@@ -559,10 +592,10 @@ function App() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+      <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
           <div className="loading mb-4"></div>
-          <p className="text-gray-600">Loading...</p>
+          <p className="text-muted-foreground">Loading...</p>
         </div>
       </div>
     );
@@ -570,148 +603,163 @@ function App() {
 
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+      <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="max-w-md w-full mx-4">
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <h1 className="text-3xl font-bold text-center text-gray-800 mb-2">People Monitor</h1>
-            <p className="text-center text-gray-600 mb-6">Emergency Response & Safety Tracking</p>
+          <div className="bg-card rounded-lg shadow-lg p-8 border">
+            <h1 className="text-3xl font-bold text-center text-foreground mb-2">People Monitor</h1>
+            <p className="text-center text-muted-foreground mb-8">Emergency Response & Safety Tracking</p>
             
             <div className="text-center mb-6">
-              <button
+              <Button
                 onClick={() => setShowAuth(true)}
-                className="bg-blue-500 text-white px-6 py-3 rounded-md hover:bg-blue-600 transition-colors font-medium"
+                size="lg"
+                className="w-full"
               >
                 Get Started
-              </button>
+              </Button>
             </div>
             
-            <div className="text-center text-sm text-gray-500">
+            <div className="text-center text-sm text-muted-foreground">
               <p>Secure admin access for emergency response coordination</p>
             </div>
           </div>
         </div>
 
         {/* Auth Modal */}
-        {showAuth && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
-              <h3 className="text-xl font-semibold text-gray-800 mb-4">
-                {isLogin ? 'Login' : 'Register'}
-              </h3>
+        <Dialog open={showAuth} onOpenChange={setShowAuth}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>{isLogin ? 'Login' : 'Register'}</DialogTitle>
+            </DialogHeader>
+            
+            <form onSubmit={handleAuth} className="space-y-4">
+              {!isLogin && (
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-2">Name</label>
+                  <input
+                    type="text"
+                    value={authForm.name}
+                    onChange={(e) => setAuthForm({...authForm, name: e.target.value})}
+                    className="w-full p-3 border border-input rounded-md bg-background text-foreground"
+                    required
+                  />
+                </div>
+              )}
               
-              <form onSubmit={handleAuth}>
-                {!isLogin && (
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Name</label>
-                    <input
-                      type="text"
-                      value={authForm.name}
-                      onChange={(e) => setAuthForm({...authForm, name: e.target.value})}
-                      className="w-full p-2 border border-gray-300 rounded-md"
-                      required
-                    />
-                  </div>
-                )}
-                
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
-                  <input
-                    type="email"
-                    value={authForm.email}
-                    onChange={(e) => setAuthForm({...authForm, email: e.target.value})}
-                    className="w-full p-2 border border-gray-300 rounded-md"
-                    required
-                  />
-                </div>
-                
-                <div className="mb-6">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Password</label>
-                  <input
-                    type="password"
-                    value={authForm.password}
-                    onChange={(e) => setAuthForm({...authForm, password: e.target.value})}
-                    className="w-full p-2 border border-gray-300 rounded-md"
-                    required
-                  />
-                </div>
-                
-                <button
-                  type="submit"
-                  className="w-full bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 transition-colors mb-4"
-                >
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">Email</label>
+                <input
+                  type="email"
+                  value={authForm.email}
+                  onChange={(e) => setAuthForm({...authForm, email: e.target.value})}
+                  className="w-full p-3 border border-input rounded-md bg-background text-foreground"
+                  required
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">Password</label>
+                <input
+                  type="password"
+                  value={authForm.password}
+                  onChange={(e) => setAuthForm({...authForm, password: e.target.value})}
+                  className="w-full p-3 border border-input rounded-md bg-background text-foreground"
+                  required
+                />
+              </div>
+              
+              <DialogFooter className="space-y-2">
+                <Button type="submit" className="w-full">
                   {isLogin ? 'Login' : 'Register'}
-                </button>
-              </form>
-              
-              <div className="text-center">
-                <button
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
                   onClick={() => setIsLogin(!isLogin)}
-                  className="text-blue-500 hover:text-blue-700 text-sm"
+                  className="w-full"
                 >
                   {isLogin ? 'Need an account? Register' : 'Already have an account? Login'}
-                </button>
-              </div>
-              
-              <div className="mt-4 text-center">
-                <button
-                  onClick={() => setShowAuth(false)}
-                  className="text-gray-500 hover:text-gray-700 text-sm"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-100">
+    <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-8">
         <header className="text-center mb-8">
           <div className="flex justify-between items-center mb-4">
-            <h1 className="text-4xl font-bold text-gray-800">People Monitor</h1>
+            <h1 className="text-4xl font-bold text-foreground">People Monitor</h1>
             <div className="flex items-center gap-4">
-              <span className="text-gray-600">Welcome, {user?.name}</span>
-              <button
-                onClick={logout}
-                className="text-red-500 hover:text-red-700 text-sm"
-              >
+              <span className="text-muted-foreground">Welcome, {user?.name}</span>
+              <Button variant="ghost" onClick={logout} className="text-destructive">
                 Logout
-              </button>
+              </Button>
             </div>
           </div>
-          <p className="text-gray-600">Emergency Response & Safety Tracking</p>
+          <p className="text-muted-foreground">Emergency Response & Safety Tracking</p>
         </header>
 
         {!selectedEvent ? (
-          <div className="max-w-4xl mx-auto">
+          <div className="max-w-6xl mx-auto">
             <div className="flex justify-between items-center mb-6">
-              <h2 className="text-2xl font-semibold text-gray-800">Your Events</h2>
-              <button
-                onClick={() => setShowCreateEvent(true)}
-                className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition-colors"
-              >
+              <h2 className="text-2xl font-semibold text-foreground">Your Events</h2>
+              <Button onClick={() => setShowCreateEvent(true)}>
+                <Plus className="w-4 h-4 mr-2" />
                 Create New Event
-              </button>
+              </Button>
             </div>
 
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
               {events.map((event) => (
                 <div
                   key={event.id}
-                  className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow cursor-pointer"
+                  className="bg-card rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow cursor-pointer border relative group"
                   onClick={() => setSelectedEvent(event.id)}
                 >
-                  <h3 className="text-xl font-semibold text-gray-800 mb-2">{event.title}</h3>
-                  <p className="text-gray-600 mb-3">{event.description}</p>
+                  <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-destructive hover:text-destructive"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDeleteEventId(event.id);
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Delete Event</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Are you sure you want to delete "{event.title}"? This action cannot be undone and will remove all associated data.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction onClick={deleteEvent} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                            Delete
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
+                  
+                  <h3 className="text-xl font-semibold text-card-foreground mb-2">{event.title}</h3>
+                  <p className="text-muted-foreground mb-4">{event.description}</p>
                   <div className="flex items-center justify-between">
-                    <span className="bg-red-100 text-red-800 px-2 py-1 rounded-full text-sm">
+                    <span className="bg-destructive/10 text-destructive px-3 py-1 rounded-full text-sm font-medium">
                       {event.calamity_type}
                     </span>
-                    <span className="text-sm text-gray-500">
+                    <span className="text-sm text-muted-foreground">
                       {new Date(event.created_at).toLocaleDateString()}
                     </span>
                   </div>
@@ -721,111 +769,92 @@ function App() {
 
             {events.length === 0 && (
               <div className="text-center py-12">
-                <p className="text-gray-500 text-lg">No events created yet</p>
-                <p className="text-gray-400">Create your first calamity monitoring event</p>
+                <p className="text-muted-foreground text-lg">No events created yet</p>
+                <p className="text-muted-foreground">Create your first calamity monitoring event</p>
               </div>
             )}
           </div>
         ) : (
           <div className="max-w-6xl mx-auto">
             <div className="flex justify-between items-center mb-6">
-              <button
-                onClick={() => setSelectedEvent(null)}
-                className="text-blue-500 hover:text-blue-700 flex items-center"
-              >
+              <Button variant="ghost" onClick={() => setSelectedEvent(null)} className="text-primary">
                 ← Back to Events
-              </button>
+              </Button>
               <div className="flex gap-2">
-                <button
-                  onClick={openEditEvent}
-                  className="bg-yellow-500 text-white px-4 py-2 rounded-md hover:bg-yellow-600 transition-colors"
-                >
-                  Edit Event
-                </button>
-                <button
-                  onClick={openDuplicateEvent}
-                  className="bg-indigo-500 text-white px-4 py-2 rounded-md hover:bg-indigo-600 transition-colors"
-                >
+                <Button variant="outline" onClick={openEditEvent}>
+                  <Edit className="w-4 h-4 mr-2" />
+                  Edit
+                </Button>
+                <Button variant="outline" onClick={openDuplicateEvent}>
+                  <Copy className="w-4 h-4 mr-2" />
                   Duplicate
-                </button>
-                <button
-                  onClick={generateShareLink}
-                  className="bg-green-500 text-white px-4 py-2 rounded-md hover:bg-green-600 transition-colors"
-                >
-                  Share Link
-                </button>
-                <button
-                  onClick={() => setShowAddPerson(true)}
-                  className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition-colors"
-                >
+                </Button>
+                <Button variant="outline" onClick={generateShareLink}>
+                  <Share className="w-4 h-4 mr-2" />
+                  Share
+                </Button>
+                <Button variant="outline" onClick={() => setShowAddPerson(true)}>
+                  <UserPlus className="w-4 h-4 mr-2" />
                   Add Person
-                </button>
-                <button
-                  onClick={() => setShowBulkAdd(true)}
-                  className="bg-purple-500 text-white px-4 py-2 rounded-md hover:bg-purple-600 transition-colors"
-                >
+                </Button>
+                <Button onClick={() => setShowBulkAdd(true)}>
+                  <Upload className="w-4 h-4 mr-2" />
                   Bulk Add
-                </button>
-                <button
-                  onClick={() => setShowExcelUpload(true)}
-                  className="bg-orange-500 text-white px-4 py-2 rounded-md hover:bg-orange-600 transition-colors"
-                >
-                  Excel Upload
-                </button>
+                </Button>
               </div>
             </div>
 
             {eventStatistics && (
-              <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-                <h3 className="text-xl font-semibold text-gray-800 mb-4">Event Statistics</h3>
+              <div className="bg-card rounded-lg shadow-md p-6 mb-6 border">
+                <h3 className="text-xl font-semibold text-card-foreground mb-4">Event Statistics</h3>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                   <div className="text-center">
-                    <div className="text-2xl font-bold text-blue-600">{eventStatistics.total_people}</div>
-                    <div className="text-sm text-gray-600">Total People</div>
+                    <div className="text-2xl font-bold text-primary">{eventStatistics.total_people}</div>
+                    <div className="text-sm text-muted-foreground">Total People</div>
                   </div>
                   <div className="text-center">
                     <div className="text-2xl font-bold text-green-600">{eventStatistics.safe_count}</div>
-                    <div className="text-sm text-gray-600">Safe</div>
+                    <div className="text-sm text-muted-foreground">Safe</div>
                   </div>
                   <div className="text-center">
                     <div className="text-2xl font-bold text-red-600">{eventStatistics.need_help_count}</div>
-                    <div className="text-sm text-gray-600">Need Help</div>
+                    <div className="text-sm text-muted-foreground">Need Help</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-2xl font-bold text-gray-600">{eventStatistics.no_response_count}</div>
-                    <div className="text-sm text-gray-600">No Response</div>
+                    <div className="text-2xl font-bold text-muted-foreground">{eventStatistics.no_response_count}</div>
+                    <div className="text-sm text-muted-foreground">No Response</div>
                   </div>
                 </div>
                 <div className="text-center">
-                  <div className="text-lg font-semibold text-blue-600">
+                  <div className="text-lg font-semibold text-primary">
                     {eventStatistics.response_rate.toFixed(1)}% Response Rate
                   </div>
                 </div>
               </div>
             )}
 
-            <div className="bg-white rounded-lg shadow-md p-6">
-              <h3 className="text-xl font-semibold text-gray-800 mb-4">People Status</h3>
+            <div className="bg-card rounded-lg shadow-md p-6 border">
+              <h3 className="text-xl font-semibold text-card-foreground mb-4">People Status</h3>
               <div className="space-y-4">
                 {people.map((person) => {
                   const status = getPersonStatus(person.id);
                   const response = getPersonResponse(person.id);
                   return (
-                    <div key={person.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                    <div key={person.id} className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
                       <div className="flex-1">
                         <div className="flex items-center gap-3">
                           <span className={`text-2xl ${getStatusColor(status)}`}>
                             {getStatusIcon(status)}
                           </span>
                           <div>
-                            <h4 className="font-medium text-gray-800">{person.name}</h4>
-                            <p className="text-sm text-gray-600">{person.contact}</p>
+                            <h4 className="font-medium text-card-foreground">{person.name}</h4>
+                            <p className="text-sm text-muted-foreground">{person.contact}</p>
                           </div>
                         </div>
                         {person.tags.length > 0 && (
                           <div className="flex gap-2 mt-2">
                             {person.tags.map((tag) => (
-                              <span key={tag} className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs">
+                              <span key={tag} className="bg-primary/10 text-primary px-2 py-1 rounded-full text-xs">
                                 {tag}
                               </span>
                             ))}
@@ -839,29 +868,49 @@ function App() {
                              status === 'need_help' ? 'Need Help' : 'No Response'}
                           </div>
                           {response && (
-                            <div className="text-sm text-gray-500">
+                            <div className="text-sm text-muted-foreground">
                               {new Date(response.response_time).toLocaleString()}
                             </div>
                           )}
                           {response && response.message && (
-                            <div className="text-sm text-gray-600 mt-1 italic">
+                            <div className="text-sm text-muted-foreground mt-1 italic">
                               "{response.message}"
                             </div>
                           )}
                         </div>
                         <div className="flex flex-col gap-1">
-                          <button
+                          <Button
+                            variant="ghost"
+                            size="sm"
                             onClick={() => openEditPerson(person)}
-                            className="text-blue-500 hover:text-blue-700 text-sm"
                           >
-                            Edit
-                          </button>
-                          <button
-                            onClick={() => deletePerson(person.id)}
-                            className="text-red-500 hover:text-red-700 text-sm"
-                          >
-                            Remove
-                          </button>
+                            <Edit className="w-3 h-3" />
+                          </Button>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-destructive hover:text-destructive"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Remove Person</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Are you sure you want to remove {person.name} from this event?
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => deletePerson(person.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                                  Remove
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
                         </div>
                       </div>
                     </div>
@@ -873,519 +922,371 @@ function App() {
         )}
 
         {/* Create Event Modal */}
-        {showCreateEvent && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
-              <h3 className="text-xl font-semibold text-gray-800 mb-4">Create New Event</h3>
-              <form onSubmit={createEvent}>
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Event Title</label>
-                  <input
-                    type="text"
-                    value={eventForm.title}
-                    onChange={(e) => setEventForm({...eventForm, title: e.target.value})}
-                    className="w-full p-2 border border-gray-300 rounded-md"
-                    required
-                  />
-                </div>
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
-                  <textarea
-                    value={eventForm.description}
-                    onChange={(e) => setEventForm({...eventForm, description: e.target.value})}
-                    className="w-full p-2 border border-gray-300 rounded-md"
-                    rows="3"
-                    required
-                  />
-                </div>
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Calamity Type</label>
-                  <select
-                    value={eventForm.calamity_type}
-                    onChange={(e) => setEventForm({...eventForm, calamity_type: e.target.value})}
-                    className="w-full p-2 border border-gray-300 rounded-md"
-                  >
-                    <option value="flood">Flood</option>
-                    <option value="typhoon">Typhoon</option>
-                    <option value="storm">Storm</option>
-                    <option value="earthquake">Earthquake</option>
-                    <option value="fire">Fire</option>
-                    <option value="other">Other</option>
-                  </select>
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    type="submit"
-                    className="flex-1 bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 transition-colors"
-                  >
-                    Create Event
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowCreateEvent(false)}
-                    className="flex-1 bg-gray-500 text-white py-2 px-4 rounded-md hover:bg-gray-600 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
+        <Dialog open={showCreateEvent} onOpenChange={setShowCreateEvent}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Create New Event</DialogTitle>
+            </DialogHeader>
+            <form onSubmit={createEvent} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">Event Title</label>
+                <input
+                  type="text"
+                  value={eventForm.title}
+                  onChange={(e) => setEventForm({...eventForm, title: e.target.value})}
+                  className="w-full p-3 border border-input rounded-md bg-background text-foreground"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">Description</label>
+                <textarea
+                  value={eventForm.description}
+                  onChange={(e) => setEventForm({...eventForm, description: e.target.value})}
+                  className="w-full p-3 border border-input rounded-md bg-background text-foreground"
+                  rows="3"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">Calamity Type</label>
+                <select
+                  value={eventForm.calamity_type}
+                  onChange={(e) => setEventForm({...eventForm, calamity_type: e.target.value})}
+                  className="w-full p-3 border border-input rounded-md bg-background text-foreground"
+                >
+                  <option value="flood">Flood</option>
+                  <option value="typhoon">Typhoon</option>
+                  <option value="storm">Storm</option>
+                  <option value="earthquake">Earthquake</option>
+                  <option value="fire">Fire</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+              <DialogFooter>
+                <Button type="submit">Create Event</Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
 
         {/* Edit Event Modal */}
-        {showEditEvent && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
-              <h3 className="text-xl font-semibold text-gray-800 mb-4">Edit Event</h3>
-              <form onSubmit={updateEvent}>
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Event Title</label>
-                  <input
-                    type="text"
-                    value={editEventForm.title}
-                    onChange={(e) => setEditEventForm({...editEventForm, title: e.target.value})}
-                    className="w-full p-2 border border-gray-300 rounded-md"
-                    required
-                  />
-                </div>
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
-                  <textarea
-                    value={editEventForm.description}
-                    onChange={(e) => setEditEventForm({...editEventForm, description: e.target.value})}
-                    className="w-full p-2 border border-gray-300 rounded-md"
-                    rows="3"
-                    required
-                  />
-                </div>
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Calamity Type</label>
-                  <select
-                    value={editEventForm.calamity_type}
-                    onChange={(e) => setEditEventForm({...editEventForm, calamity_type: e.target.value})}
-                    className="w-full p-2 border border-gray-300 rounded-md"
-                  >
-                    <option value="flood">Flood</option>
-                    <option value="typhoon">Typhoon</option>
-                    <option value="storm">Storm</option>
-                    <option value="earthquake">Earthquake</option>
-                    <option value="fire">Fire</option>
-                    <option value="other">Other</option>
-                  </select>
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    type="submit"
-                    className="flex-1 bg-yellow-500 text-white py-2 px-4 rounded-md hover:bg-yellow-600 transition-colors"
-                  >
-                    Update Event
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowEditEvent(false)}
-                    className="flex-1 bg-gray-500 text-white py-2 px-4 rounded-md hover:bg-gray-600 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
+        <Dialog open={showEditEvent} onOpenChange={setShowEditEvent}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Edit Event</DialogTitle>
+            </DialogHeader>
+            <form onSubmit={updateEvent} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">Event Title</label>
+                <input
+                  type="text"
+                  value={editEventForm.title}
+                  onChange={(e) => setEditEventForm({...editEventForm, title: e.target.value})}
+                  className="w-full p-3 border border-input rounded-md bg-background text-foreground"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">Description</label>
+                <textarea
+                  value={editEventForm.description}
+                  onChange={(e) => setEditEventForm({...editEventForm, description: e.target.value})}
+                  className="w-full p-3 border border-input rounded-md bg-background text-foreground"
+                  rows="3"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">Calamity Type</label>
+                <select
+                  value={editEventForm.calamity_type}
+                  onChange={(e) => setEditEventForm({...editEventForm, calamity_type: e.target.value})}
+                  className="w-full p-3 border border-input rounded-md bg-background text-foreground"
+                >
+                  <option value="flood">Flood</option>
+                  <option value="typhoon">Typhoon</option>
+                  <option value="storm">Storm</option>
+                  <option value="earthquake">Earthquake</option>
+                  <option value="fire">Fire</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+              <DialogFooter>
+                <Button type="submit">Update Event</Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
 
         {/* Duplicate Event Modal */}
-        {showDuplicateEvent && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
-              <h3 className="text-xl font-semibold text-gray-800 mb-4">Duplicate Event</h3>
-              <form onSubmit={duplicateEvent}>
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">New Event Title</label>
-                  <input
-                    type="text"
-                    value={duplicateEventForm.title}
-                    onChange={(e) => setDuplicateEventForm({...duplicateEventForm, title: e.target.value})}
-                    className="w-full p-2 border border-gray-300 rounded-md"
-                    required
-                  />
-                </div>
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">New Description</label>
-                  <textarea
-                    value={duplicateEventForm.description}
-                    onChange={(e) => setDuplicateEventForm({...duplicateEventForm, description: e.target.value})}
-                    className="w-full p-2 border border-gray-300 rounded-md"
-                    rows="3"
-                    required
-                  />
-                </div>
-                <div className="mb-4 p-3 bg-blue-50 rounded-md">
-                  <p className="text-sm text-blue-700">
-                    This will create a new event with the same calamity type and all the people from the current event.
-                  </p>
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    type="submit"
-                    className="flex-1 bg-indigo-500 text-white py-2 px-4 rounded-md hover:bg-indigo-600 transition-colors"
-                  >
-                    Duplicate Event
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowDuplicateEvent(false)}
-                    className="flex-1 bg-gray-500 text-white py-2 px-4 rounded-md hover:bg-gray-600 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
+        <Dialog open={showDuplicateEvent} onOpenChange={setShowDuplicateEvent}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Duplicate Event</DialogTitle>
+            </DialogHeader>
+            <form onSubmit={duplicateEvent} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">New Event Title</label>
+                <input
+                  type="text"
+                  value={duplicateEventForm.title}
+                  onChange={(e) => setDuplicateEventForm({...duplicateEventForm, title: e.target.value})}
+                  className="w-full p-3 border border-input rounded-md bg-background text-foreground"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">New Description</label>
+                <textarea
+                  value={duplicateEventForm.description}
+                  onChange={(e) => setDuplicateEventForm({...duplicateEventForm, description: e.target.value})}
+                  className="w-full p-3 border border-input rounded-md bg-background text-foreground"
+                  rows="3"
+                  required
+                />
+              </div>
+              <div className="p-3 bg-muted rounded-md">
+                <p className="text-sm text-muted-foreground">
+                  This will create a new event with the same calamity type and all the people from the current event.
+                </p>
+              </div>
+              <DialogFooter>
+                <Button type="submit">Duplicate Event</Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
 
         {/* Add Person Modal */}
-        {showAddPerson && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
-              <h3 className="text-xl font-semibold text-gray-800 mb-4">Add Person to Monitor</h3>
-              <form onSubmit={addPerson}>
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Name</label>
+        <Dialog open={showAddPerson} onOpenChange={setShowAddPerson}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Add Person to Monitor</DialogTitle>
+            </DialogHeader>
+            <form onSubmit={addPerson} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">Name</label>
+                <input
+                  type="text"
+                  value={personForm.name}
+                  onChange={(e) => setPersonForm({...personForm, name: e.target.value})}
+                  className="w-full p-3 border border-input rounded-md bg-background text-foreground"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">Contact</label>
+                <input
+                  type="text"
+                  value={personForm.contact}
+                  onChange={(e) => setPersonForm({...personForm, contact: e.target.value})}
+                  className="w-full p-3 border border-input rounded-md bg-background text-foreground"
+                  placeholder="Phone, Email, or other contact info"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">Tags/Teams</label>
+                <div className="flex gap-2 mb-2">
                   <input
                     type="text"
-                    value={personForm.name}
-                    onChange={(e) => setPersonForm({...personForm, name: e.target.value})}
-                    className="w-full p-2 border border-gray-300 rounded-md"
-                    required
+                    value={newTag}
+                    onChange={(e) => setNewTag(e.target.value)}
+                    className="flex-1 p-3 border border-input rounded-md bg-background text-foreground"
+                    placeholder="Add tag (e.g., IT Team, Floor 3)"
                   />
+                  <Button type="button" onClick={addTag}>Add</Button>
                 </div>
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Contact</label>
-                  <input
-                    type="text"
-                    value={personForm.contact}
-                    onChange={(e) => setPersonForm({...personForm, contact: e.target.value})}
-                    className="w-full p-2 border border-gray-300 rounded-md"
-                    placeholder="Phone, Email, or other contact info"
-                    required
-                  />
+                <div className="flex flex-wrap gap-2">
+                  {personForm.tags.map((tag) => (
+                    <span key={tag} className="bg-primary/10 text-primary px-2 py-1 rounded-full text-sm flex items-center gap-1">
+                      {tag}
+                      <button
+                        type="button"
+                        onClick={() => removeTag(tag)}
+                        className="text-primary hover:text-primary/80"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
                 </div>
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Tags/Teams</label>
-                  <div className="flex gap-2 mb-2">
-                    <input
-                      type="text"
-                      value={newTag}
-                      onChange={(e) => setNewTag(e.target.value)}
-                      className="flex-1 p-2 border border-gray-300 rounded-md"
-                      placeholder="Add tag (e.g., IT Team, Floor 3)"
-                    />
-                    <button
-                      type="button"
-                      onClick={addTag}
-                      className="bg-blue-500 text-white px-3 py-2 rounded-md hover:bg-blue-600 transition-colors"
-                    >
-                      Add
-                    </button>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {personForm.tags.map((tag) => (
-                      <span key={tag} className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-sm flex items-center gap-1">
-                        {tag}
-                        <button
-                          type="button"
-                          onClick={() => removeTag(tag)}
-                          className="text-blue-600 hover:text-blue-800"
-                        >
-                          ×
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    type="submit"
-                    className="flex-1 bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 transition-colors"
-                  >
-                    Add Person
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowAddPerson(false)}
-                    className="flex-1 bg-gray-500 text-white py-2 px-4 rounded-md hover:bg-gray-600 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
+              </div>
+              <DialogFooter>
+                <Button type="submit">Add Person</Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
 
         {/* Edit Person Modal */}
-        {showEditPerson && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
-              <h3 className="text-xl font-semibold text-gray-800 mb-4">Edit Person</h3>
-              <form onSubmit={updatePerson}>
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Name</label>
+        <Dialog open={showEditPerson} onOpenChange={setShowEditPerson}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Edit Person</DialogTitle>
+            </DialogHeader>
+            <form onSubmit={updatePerson} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">Name</label>
+                <input
+                  type="text"
+                  value={editPersonForm.name}
+                  onChange={(e) => setEditPersonForm({...editPersonForm, name: e.target.value})}
+                  className="w-full p-3 border border-input rounded-md bg-background text-foreground"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">Contact</label>
+                <input
+                  type="text"
+                  value={editPersonForm.contact}
+                  onChange={(e) => setEditPersonForm({...editPersonForm, contact: e.target.value})}
+                  className="w-full p-3 border border-input rounded-md bg-background text-foreground"
+                  placeholder="Phone, Email, or other contact info"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">Tags/Teams</label>
+                <div className="flex gap-2 mb-2">
                   <input
                     type="text"
-                    value={editPersonForm.name}
-                    onChange={(e) => setEditPersonForm({...editPersonForm, name: e.target.value})}
-                    className="w-full p-2 border border-gray-300 rounded-md"
-                    required
+                    value={editNewTag}
+                    onChange={(e) => setEditNewTag(e.target.value)}
+                    className="flex-1 p-3 border border-input rounded-md bg-background text-foreground"
+                    placeholder="Add tag (e.g., IT Team, Floor 3)"
                   />
+                  <Button type="button" onClick={addEditTag}>Add</Button>
                 </div>
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Contact</label>
-                  <input
-                    type="text"
-                    value={editPersonForm.contact}
-                    onChange={(e) => setEditPersonForm({...editPersonForm, contact: e.target.value})}
-                    className="w-full p-2 border border-gray-300 rounded-md"
-                    placeholder="Phone, Email, or other contact info"
-                    required
-                  />
+                <div className="flex flex-wrap gap-2">
+                  {editPersonForm.tags.map((tag) => (
+                    <span key={tag} className="bg-primary/10 text-primary px-2 py-1 rounded-full text-sm flex items-center gap-1">
+                      {tag}
+                      <button
+                        type="button"
+                        onClick={() => removeEditTag(tag)}
+                        className="text-primary hover:text-primary/80"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
                 </div>
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Tags/Teams</label>
-                  <div className="flex gap-2 mb-2">
-                    <input
-                      type="text"
-                      value={editNewTag}
-                      onChange={(e) => setEditNewTag(e.target.value)}
-                      className="flex-1 p-2 border border-gray-300 rounded-md"
-                      placeholder="Add tag (e.g., IT Team, Floor 3)"
-                    />
-                    <button
-                      type="button"
-                      onClick={addEditTag}
-                      className="bg-blue-500 text-white px-3 py-2 rounded-md hover:bg-blue-600 transition-colors"
-                    >
-                      Add
-                    </button>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {editPersonForm.tags.map((tag) => (
-                      <span key={tag} className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-sm flex items-center gap-1">
-                        {tag}
-                        <button
-                          type="button"
-                          onClick={() => removeEditTag(tag)}
-                          className="text-blue-600 hover:text-blue-800"
-                        >
-                          ×
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    type="submit"
-                    className="flex-1 bg-yellow-500 text-white py-2 px-4 rounded-md hover:bg-yellow-600 transition-colors"
-                  >
-                    Update Person
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowEditPerson(false)}
-                    className="flex-1 bg-gray-500 text-white py-2 px-4 rounded-md hover:bg-gray-600 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
+              </div>
+              <DialogFooter>
+                <Button type="submit">Update Person</Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
 
         {/* Bulk Add People Modal */}
-        {showBulkAdd && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-6 w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
-              <h3 className="text-xl font-semibold text-gray-800 mb-4">Bulk Add People</h3>
+        <Dialog open={showBulkAdd} onOpenChange={setShowBulkAdd}>
+          <DialogContent className="sm:max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Bulk Add People</DialogTitle>
+            </DialogHeader>
+            
+            <Tabs value={bulkMethod} onValueChange={setBulkMethod}>
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="text">Text Input</TabsTrigger>
+                <TabsTrigger value="excel">Excel Upload</TabsTrigger>
+              </TabsList>
               
-              <div className="mb-4 p-4 bg-blue-50 rounded-lg">
-                <h4 className="font-medium text-blue-800 mb-2">Instructions:</h4>
-                <p className="text-sm text-blue-700 mb-2">
-                  Enter one person per line in the format: <strong>Name, Contact, Tag1, Tag2, ...</strong>
-                </p>
-                <p className="text-sm text-blue-700 mb-2">Example:</p>
-                <code className="text-xs text-blue-600 bg-blue-100 px-2 py-1 rounded">
-                  John Doe, john@company.com, IT Team, Floor 3<br/>
-                  Jane Smith, jane@company.com, HR Team, Floor 2<br/>
-                  Mike Johnson, mike@company.com, IT Team
-                </code>
-              </div>
-              
-              <form onSubmit={bulkAddPeople}>
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    People Data (one per line)
-                  </label>
-                  <textarea
-                    value={bulkData}
-                    onChange={(e) => setBulkData(e.target.value)}
-                    className="w-full p-3 border border-gray-300 rounded-md h-40 font-mono text-sm"
-                    placeholder="John Doe, john@company.com, IT Team, Floor 3
+              <TabsContent value="text">
+                <div className="space-y-4">
+                  <div className="p-4 bg-muted rounded-lg">
+                    <h4 className="font-medium text-foreground mb-2">Instructions:</h4>
+                    <p className="text-sm text-muted-foreground mb-2">
+                      Enter one person per line in the format: <strong>Name, Contact, Tag1, Tag2, ...</strong>
+                    </p>
+                    <p className="text-sm text-muted-foreground mb-2">Example:</p>
+                    <code className="text-xs text-foreground bg-background px-2 py-1 rounded">
+                      John Doe, john@company.com, IT Team, Floor 3<br/>
+                      Jane Smith, jane@company.com, HR Team, Floor 2<br/>
+                      Mike Johnson, mike@company.com, IT Team
+                    </code>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      People Data (one per line)
+                    </label>
+                    <textarea
+                      value={bulkData}
+                      onChange={(e) => setBulkData(e.target.value)}
+                      className="w-full p-3 border border-input rounded-md h-40 font-mono text-sm bg-background text-foreground"
+                      placeholder="John Doe, john@company.com, IT Team, Floor 3
 Jane Smith, jane@company.com, HR Team, Floor 2
 Mike Johnson, mike@company.com, IT Team"
-                    required
-                  />
+                      required
+                    />
+                  </div>
                 </div>
-                
-                {bulkResult && (
-                  <div className="mb-4 p-4 bg-gray-50 rounded-lg">
-                    <h4 className="font-medium text-gray-800 mb-2">Bulk Add Result:</h4>
-                    <p className="text-sm text-green-600 mb-1">
-                      ✅ Successfully added: {bulkResult.added_count} people
-                    </p>
-                    <p className="text-sm text-gray-600 mb-2">
-                      Total requested: {bulkResult.total_requested}
-                    </p>
-                    {bulkResult.errors && bulkResult.errors.length > 0 && (
-                      <div>
-                        <p className="text-sm text-red-600 mb-1">❌ Errors:</p>
-                        <ul className="text-xs text-red-500 ml-4">
-                          {bulkResult.errors.map((error, idx) => (
-                            <li key={idx}>• {error}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
+              </TabsContent>
+              
+              <TabsContent value="excel">
+                <div className="space-y-4">
+                  <div className="p-4 bg-muted rounded-lg">
+                    <h4 className="font-medium text-foreground mb-2">Excel Format Requirements:</h4>
+                    <ul className="text-sm text-muted-foreground space-y-1">
+                      <li>• Required columns: <strong>Name</strong>, <strong>Contact</strong></li>
+                      <li>• Optional columns: <strong>Tags</strong> (comma-separated) or <strong>Tag1</strong>, <strong>Tag2</strong>, etc.</li>
+                      <li>• File must be .xlsx or .xls format</li>
+                      <li>• First row should contain column headers</li>
+                    </ul>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      Select Excel File
+                    </label>
+                    <input
+                      type="file"
+                      accept=".xlsx,.xls"
+                      onChange={(e) => setExcelFile(e.target.files[0])}
+                      className="w-full p-3 border border-input rounded-md bg-background text-foreground"
+                      required
+                    />
+                  </div>
+                </div>
+              </TabsContent>
+            </Tabs>
+            
+            {(bulkResult || excelResult) && (
+              <div className="p-4 bg-muted rounded-lg">
+                <h4 className="font-medium text-foreground mb-2">Result:</h4>
+                <p className="text-sm text-green-600 mb-1">
+                  ✅ Successfully added: {(bulkResult?.added_count || excelResult?.added_count) || 0} people
+                </p>
+                <p className="text-sm text-muted-foreground mb-2">
+                  Total {bulkResult ? 'requested' : 'rows'}: {(bulkResult?.total_requested || excelResult?.total_rows) || 0}
+                </p>
+                {((bulkResult?.errors && bulkResult.errors.length > 0) || (excelResult?.errors && excelResult.errors.length > 0)) && (
+                  <div>
+                    <p className="text-sm text-red-600 mb-1">❌ Errors:</p>
+                    <ul className="text-xs text-red-500 ml-4 max-h-32 overflow-y-auto">
+                      {(bulkResult?.errors || excelResult?.errors || []).map((error, idx) => (
+                        <li key={idx}>• {error}</li>
+                      ))}
+                    </ul>
                   </div>
                 )}
-                
-                <div className="flex gap-2">
-                  <button
-                    type="submit"
-                    className="flex-1 bg-purple-500 text-white py-2 px-4 rounded-md hover:bg-purple-600 transition-colors"
-                  >
-                    Add All People
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowBulkAdd(false);
-                      setBulkData('');
-                      setBulkResult(null);
-                    }}
-                    className="flex-1 bg-gray-500 text-white py-2 px-4 rounded-md hover:bg-gray-600 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
-
-        {/* Excel Upload Modal */}
-        {showExcelUpload && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-6 w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
-              <h3 className="text-xl font-semibold text-gray-800 mb-4">Excel Upload</h3>
-              
-              <div className="mb-4 p-4 bg-orange-50 rounded-lg">
-                <h4 className="font-medium text-orange-800 mb-2">Excel Format Requirements:</h4>
-                <ul className="text-sm text-orange-700 mb-2 space-y-1">
-                  <li>• Required columns: <strong>Name</strong>, <strong>Contact</strong></li>
-                  <li>• Optional columns: <strong>Tags</strong> (comma-separated) or <strong>Tag1</strong>, <strong>Tag2</strong>, etc.</li>
-                  <li>• File must be .xlsx or .xls format</li>
-                  <li>• First row should contain column headers</li>
-                </ul>
-                <p className="text-sm text-orange-700">Example:</p>
-                <div className="text-xs text-orange-600 bg-orange-100 px-2 py-1 rounded mt-1">
-                  <table className="w-full">
-                    <thead>
-                      <tr>
-                        <th className="text-left">Name</th>
-                        <th className="text-left">Contact</th>
-                        <th className="text-left">Tags</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr>
-                        <td>John Doe</td>
-                        <td>john@company.com</td>
-                        <td>IT Team, Floor 3</td>
-                      </tr>
-                      <tr>
-                        <td>Jane Smith</td>
-                        <td>jane@company.com</td>
-                        <td>HR Team, Floor 2</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
               </div>
-              
-              <form onSubmit={uploadExcelFile}>
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Select Excel File
-                  </label>
-                  <input
-                    type="file"
-                    accept=".xlsx,.xls"
-                    onChange={(e) => setExcelFile(e.target.files[0])}
-                    className="w-full p-2 border border-gray-300 rounded-md"
-                    required
-                  />
-                </div>
-                
-                {excelResult && (
-                  <div className="mb-4 p-4 bg-gray-50 rounded-lg">
-                    <h4 className="font-medium text-gray-800 mb-2">Excel Upload Result:</h4>
-                    <p className="text-sm text-green-600 mb-1">
-                      ✅ Successfully added: {excelResult.added_count} people
-                    </p>
-                    <p className="text-sm text-gray-600 mb-2">
-                      Total rows processed: {excelResult.total_rows}
-                    </p>
-                    {excelResult.errors && excelResult.errors.length > 0 && (
-                      <div>
-                        <p className="text-sm text-red-600 mb-1">❌ Errors:</p>
-                        <ul className="text-xs text-red-500 ml-4 max-h-32 overflow-y-auto">
-                          {excelResult.errors.map((error, idx) => (
-                            <li key={idx}>• {error}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                  </div>
-                )}
-                
-                <div className="flex gap-2">
-                  <button
-                    type="submit"
-                    disabled={uploadingExcel}
-                    className="flex-1 bg-orange-500 text-white py-2 px-4 rounded-md hover:bg-orange-600 transition-colors disabled:opacity-50"
-                  >
-                    {uploadingExcel ? 'Uploading...' : 'Upload Excel File'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowExcelUpload(false);
-                      setExcelFile(null);
-                      setExcelResult(null);
-                    }}
-                    className="flex-1 bg-gray-500 text-white py-2 px-4 rounded-md hover:bg-gray-600 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
+            )}
+            
+            <DialogFooter>
+              <Button 
+                onClick={handleBulkAdd}
+                disabled={uploadingExcel || (bulkMethod === 'text' && !bulkData.trim()) || (bulkMethod === 'excel' && !excelFile)}
+              >
+                {uploadingExcel ? 'Processing...' : 'Add People'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );
