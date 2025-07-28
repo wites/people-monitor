@@ -11,6 +11,7 @@ function App() {
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [showCreateEvent, setShowCreateEvent] = useState(false);
   const [showAddPerson, setShowAddPerson] = useState(false);
+  const [showBulkAdd, setShowBulkAdd] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
   const [isLogin, setIsLogin] = useState(true);
   const [eventStatistics, setEventStatistics] = useState(null);
