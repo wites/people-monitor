@@ -761,6 +761,13 @@ def main():
     test_results.append(("Add People to Event", tester.test_add_people_to_event()))
     test_results.append(("Get Event People", tester.test_get_event_people()))
     
+    # NEW FEATURES TESTING
+    test_results.append(("Update Event Details", tester.test_update_event()))
+    test_results.append(("Duplicate Event with People", tester.test_duplicate_event()))
+    test_results.append(("Update Person Details", tester.test_update_person()))
+    test_results.append(("Remove Person from Event", tester.test_remove_person()))
+    test_results.append(("Excel Upload Endpoint", tester.test_excel_upload_simulation()))
+    
     # Bulk add people tests
     test_results.append(("Bulk Add People (Valid Data)", tester.test_bulk_add_people_valid()))
     test_results.append(("Bulk Add People (Mixed Data)", tester.test_bulk_add_people_mixed_data()))
