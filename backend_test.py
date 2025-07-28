@@ -69,6 +69,85 @@ class PeopleMonitorAPITester:
         """Test root endpoint"""
         return self.run_test("Root Endpoint", "GET", "", 200)
 
+    def test_user_registration(self):
+        """Test user registration"""
+        user_data = {
+            "email": self.test_email,
+            "name": self.test_name,
+            "password": self.test_password
+        }
+        
+        success, response = self.run_test(
+            "User Registration",
+            "POST",
+            "api/auth/register",
+            200,
+            data=user_data
+        )
+        
+        if success and 'access_token' in response:
+            self.token = response['access_token']
+            print(f"   Token received: {self.token[:20]}...")
+            return True
+        return False
+
+    def test_user_login(self):
+        """Test user login"""
+        login_data = {
+            "email": self.test_email,
+            "password": self.test_password
+        }
+        
+        success, response = self.run_test(
+            "User Login",
+            "POST",
+            "api/auth/login",
+            200,
+            data=login_data
+        )
+        
+        if success and 'access_token' in response:
+            self.token = response['access_token']
+            print(f"   Token received: {self.token[:20]}...")
+            return True
+        return False
+
+    def test_get_current_user(self):
+        """Test getting current user info"""
+        success, response = self.run_test(
+            "Get Current User",
+            "GET",
+            "api/auth/me",
+            200,
+            auth_required=True
+        )
+        
+        if success and 'id' in response:
+            self.user_id = response['id']
+            print(f"   User ID: {self.user_id}")
+            print(f"   User Email: {response.get('email')}")
+            print(f"   User Name: {response.get('name')}")
+            return True
+        return False
+
+    def test_unauthorized_access(self):
+        """Test accessing protected endpoints without authentication"""
+        # Save current token
+        old_token = self.token
+        self.token = None
+        
+        success, _ = self.run_test(
+            "Unauthorized Access (should fail)",
+            "GET",
+            "api/events",
+            403,  # Should return 403 Forbidden
+            auth_required=True
+        )
+        
+        # Restore token
+        self.token = old_token
+        return success
+
     def test_create_event(self):
         """Test creating a new calamity event"""
         event_data = {
