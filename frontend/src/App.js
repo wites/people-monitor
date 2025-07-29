@@ -802,8 +802,50 @@ function App() {
                   <Upload className="w-4 h-4 mr-2" />
                   Bulk Add
                 </Button>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                      onClick={() => setDeleteEventId(selectedEvent)}
+                    >
+                      <Trash2 className="w-4 h-4 mr-2" />
+                      Delete Event
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Delete Event</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Are you sure you want to delete "{currentEvent?.title}"? This action cannot be undone and will remove all associated data.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction onClick={deleteEvent} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                        Delete
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               </div>
             </div>
+
+            {/* Event Title Header */}
+            {currentEvent && (
+              <div className="mb-6">
+                <h2 className="text-3xl font-bold text-foreground mb-2">{currentEvent.title}</h2>
+                <p className="text-muted-foreground mb-1">{currentEvent.description}</p>
+                <div className="flex items-center gap-4">
+                  <span className="bg-destructive/10 text-destructive px-3 py-1 rounded-full text-sm font-medium">
+                    {currentEvent.calamity_type}
+                  </span>
+                  <span className="text-sm text-muted-foreground">
+                    Created: {new Date(currentEvent.created_at).toLocaleDateString()}
+                  </span>
+                </div>
+              </div>
+            )}
 
             {eventStatistics && (
               <div className="bg-card rounded-lg shadow-md p-6 mb-6 border">
