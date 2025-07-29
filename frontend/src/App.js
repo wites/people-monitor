@@ -276,10 +276,11 @@ function App() {
       });
 
       if (response.ok) {
-        setDeleteEventId(null);
+        // If we're currently viewing the deleted event, go back to events list
         if (selectedEvent === deleteEventId) {
           setSelectedEvent(null);
         }
+        setDeleteEventId(null);
         fetchEvents();
       }
     } catch (error) {
